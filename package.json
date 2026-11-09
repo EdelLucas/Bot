@@ -1,0 +1,20 @@
+{
+  "name": "discord-sheet-bot",
+  "version": "1.0.0",
+  "description": "Discord-Bot, der Slash-Commands entgegennimmt und die Daten in ein Google Sheet schreibt.",
+  "main": "src/index.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node src/index.js",
+    "deploy": "node src/deploy-commands.js",
+    "check": "node --check src/index.js && node --check src/deploy-commands.js && node --check src/sheets.js && node --check src/config.js && for f in src/commands/*.js; do node --check \"$f\" || exit 1; done"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "discord.js": "^14.16.3",
+    "dotenv": "^16.4.5",
+    "googleapis": "^144.0.0"
+  }
+}
