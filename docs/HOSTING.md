@@ -2,19 +2,75 @@
 
 Der Bot muss **dauerhaft laufen**. Sonst kann er Events nicht automatisch starten und den Voice-Call nicht erfassen. Dafür braucht man einen kleinen Server, der nie ausgeht. Dieser hier kostet nichts.
 
-> **Ehrlich vorweg:** Alle seriösen Gratis-Server (Google, Oracle) wollen bei der Anmeldung eine **Kreditkarte zur Verifizierung**. Abgebucht wird nichts, solange man im Gratis-Rahmen bleibt, und diese Anleitung bleibt darin. Ganz ohne Karte geht es nur mit eigener Hardware (siehe [Option C](#option-c-eigener-rechner--raspberry-pi-ohne-kreditkarte)).
+> **Ehrlich vorweg:** Alle seriösen Gratis-Server (Google, Oracle) wollen bei der Anmeldung eine **Kreditkarte zur Verifizierung**. Abgebucht wird nichts, solange man im Gratis-Rahmen bleibt, und diese Anleitung bleibt darin. Ohne Karte gehen nur **Bot-Hosting.net** (unten) oder eigene Hardware (siehe [Option C](#option-c-eigener-rechner--raspberry-pi-ohne-kreditkarte)).
 
 | Option | Kosten | Karte nötig | Bewertung |
 |---|---|---|---|
-| **A: Google Cloud e2-micro** | 0 € dauerhaft | ja (Verifizierung) | ⭐ **Empfohlen**: ihr habt für das Sheet sowieso schon ein Google-Cloud-Projekt |
+| **⭐ Bot-Hosting.net** | 0 € | **nein** | Am einfachsten: alles im Browser, ideal für einen Bot unter Freunden. Gratis-Server muss regelmäßig verlängert werden |
+| A: Google Cloud e2-micro | 0 € dauerhaft | ja (Verifizierung) | Eigener Server, läuft ohne Verlängern |
 | B: Oracle Cloud Always Free | 0 € dauerhaft | ja (Verifizierung) | Stärkerer Server, aber Oracle kann „untätige“ Gratis-Server stoppen |
 | C: Eigener PC / Raspberry Pi | nur Strom | nein | Läuft nur, solange das Gerät an ist und Internet hat |
 
-**Nicht empfehlenswert:** Render, Railway, Fly.io, Replit und ähnliche Plattformen. Ihre Gratis-Stufen schlafen nach kurzer Zeit ein, haben keine dauerhafte Festplatte (die Call-Erfassung ginge verloren) oder sind gar nicht mehr gratis. Von „Free Discord Bot Hosting“-Seiten ebenfalls abraten: Dort gebt ihr euren Bot-Token und den Google-Schlüssel an Unbekannte.
+**Nicht empfehlenswert:** Render, Railway, Fly.io, Replit und ähnliche Plattformen. Ihre Gratis-Stufen schlafen nach kurzer Zeit ein oder haben keine dauerhafte Festplatte, dann ginge die Call-Erfassung verloren.
 
 ---
 
-## Option A: Google Cloud e2-micro (empfohlen)
+## Bot-Hosting.net (ohne Kreditkarte)
+
+Bot-Hosting.net ist ein Gratis-Hoster speziell für Discord-Bots. Man verwaltet alles über ein Web-Panel (Pterodactyl). Der Gratis-Plan ist klein, z.B. 256 MB RAM und 512 MB Speicher, reicht für diesen Bot aber.
+
+### Schritt 1: Dateien vorbereiten (auf deinem PC)
+1. Auf GitHub im Repo den richtigen Branch auswählen, dann **Code → Download ZIP**. Die ZIP entpacken.
+2. In den entpackten Ordner diese zwei Dateien legen:
+   - **`credentials.json`**: der Google-Dienstkonto-Schlüssel
+   - **`.env`**: Kopie von `.env.example`, ausgefüllt mit Token, IDs usw.
+3. **Den Inhalt** des Ordners (nicht den Ordner selbst) markieren, also `src`, `package.json`, `.env`, `credentials.json` usw., und daraus eine ZIP machen: Rechtsklick → *Senden an → ZIP-komprimierter Ordner*.
+   > Unter Windows sind Dateien mit Punkt am Anfang manchmal versteckt. Die `.env` kannst du auch später direkt im Panel anlegen (siehe Schritt 3).
+
+### Schritt 2: Server anlegen
+1. <https://bot-hosting.net> öffnen → **Login mit Discord**.
+2. Einen **kostenlosen Server** erstellen, als Sprache **Node.js** wählen.
+3. Den Server im **Panel** öffnen.
+
+### Schritt 3: Hochladen
+1. Im Panel **Files** öffnen. Liegen dort Beispieldateien (z.B. `index.js`), diese löschen.
+2. **Upload** → deine ZIP hochladen → bei der ZIP auf **⋮ → Unarchive** (Entpacken) klicken → danach die ZIP löschen.
+   Im obersten Ordner müssen jetzt direkt `package.json`, `src/`, `.env` und `credentials.json` liegen, also **nicht** in einem Unterordner.
+3. Fehlt die `.env`: **New File** → Name `.env` → Inhalt von `.env.example` einfügen, ausfüllen und speichern.
+
+### Schritt 4: Startdatei einstellen
+Im Panel unter **Startup**:
+- **Docker Image / Node-Version:** Node **18 oder neuer**, am besten die neueste angebotene (z.B. 22).
+- Das Feld für die Startdatei (heißt meist **MAIN FILE**, *Bot JS File* o.ä.): **`src/index.js`**
+- Falls es Felder wie *Git Repo Address* gibt: leer lassen. Man kann damit auch automatisch von GitHub laden, für den Anfang ist der Upload aber einfacher.
+
+### Schritt 5: Starten
+**Console → Start.** Beim ersten Start installiert das Panel die Pakete selbst (`npm install`), das dauert etwas. Danach sollte erscheinen:
+```
+📊 Google Sheet verbunden: https://docs.google.com/...
+🤖 Eingeloggt als DeinBot#1234
+✅ 4 Slash-Commands auf dem Server registriert
+```
+Die Slash-Commands registriert der Bot bei jedem Start selbst. `npm run deploy` braucht man hier nicht. Fertig, der Bot läuft jetzt auch, wenn dein PC aus ist.
+
+### Wichtig bei Bot-Hosting.net
+- **Verlängern nicht vergessen:** Gratis-Server müssen regelmäßig im Panel bzw. auf der Webseite verlängert werden (zuletzt alle paar Tage). Sonst wird der Server gestoppt. Am besten eine Handy-Erinnerung stellen.
+- **Updates einspielen:** Geänderte Dateien (meist nur in `src/`) über **Files** hochladen und überschreiben, dann **Restart**. `.env`, `credentials.json` und den Ordner `data/` dabei **nicht** löschen. In `data/` steckt die laufende Call-Erfassung.
+- **Nicht während eines Events neu starten**, wenn es sich vermeiden lässt. Die Minuten, in denen der Bot aus ist, zählen für niemanden.
+- **Sicherheit:** Der Hoster kann deine Dateien sehen. Deshalb das Google-Dienstkonto **nur** mit diesem einen Sheet teilen. Kommt dir etwas komisch vor, den Discord-Token im Developer Portal neu erzeugen und in der `.env` ersetzen.
+
+### Probleme bei Bot-Hosting.net
+| Problem | Lösung |
+|---|---|
+| `Cannot find module '/home/container/index.js'` | Startdatei unter **Startup** auf `src/index.js` stellen |
+| `Cannot find module 'discord.js'` | Neu starten, damit `npm install` läuft. Prüfen, ob `package.json` ganz oben in **Files** liegt |
+| `ENOSPC` / Speicher voll | Ordner `node_modules` löschen und neu starten (wird neu installiert) |
+| Bot startet ständig neu, `JavaScript heap out of memory` | RAM zu knapp. Beim Anbieter prüfen, ob ein größerer Gratis-Plan verfügbar ist |
+| Weitere Fehlermeldungen | siehe Tabelle [Probleme?](#probleme) ganz unten |
+
+---
+
+## Option A: Google Cloud e2-micro
 
 Google schenkt jedem Konto **eine kleine VM pro Monat dauerhaft**: e2-micro mit 2 vCPU (geteilt), 1 GB RAM und 30 GB Festplatte. Für diesen Bot reicht das locker.
 
@@ -115,6 +171,6 @@ Nachteil: Strom (ein Pi braucht ca. 3–5 W, also wenige Euro im Jahr). Und wenn
 | Logs: `Umgebungsvariable … fehlt` | `.env` unvollständig. `nano ~/Bot/.env`, dann neu starten. |
 | Logs: `The caller does not have permission` | Sheet ist nicht mit der E-Mail-Adresse des Dienstkontos als **Bearbeiter** geteilt. |
 | Logs: `An invalid token was provided` | `DISCORD_TOKEN` falsch oder im Developer Portal neu generiert. |
-| Slash-Commands erscheinen nicht | `DISCORD_GUILD_ID` setzen und `npm run deploy` ausführen, Discord neu laden (`Strg+R`). |
+| Slash-Commands erscheinen nicht | `DISCORD_GUILD_ID` in der `.env` setzen, Bot neu starten, Discord neu laden (`Strg+R`). |
 | Bot zählt niemanden im Call | Bot braucht die Berechtigung „Kanal ansehen“ für den Voice-Kanal. |
 | Google schickt Budget-Warnung | VM-Einstellungen prüfen: Region us-…, e2-micro, Standard-Festplatte, keine statische IP. |

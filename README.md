@@ -82,11 +82,10 @@ Der Bot muss die Voice-Kanäle **sehen** können, sonst kann er die Teilnehmer n
 ```bash
 cp .env.example .env     # und ausfüllen
 npm install
-npm run deploy           # Slash-Commands registrieren (einmalig + nach Änderungen)
-npm start
+npm start                # registriert die Slash-Commands beim Start automatisch
 ```
 
-👉 **24/7 kostenlos hosten:** siehe [docs/HOSTING.md](docs/HOSTING.md)
+👉 **24/7 kostenlos hosten (z.B. auf Bot-Hosting.net, ohne Kreditkarte):** siehe [docs/HOSTING.md](docs/HOSTING.md)
 
 Der Bot muss während des Events laufen, sonst kann er den Call nicht erfassen. Die laufende Erfassung wird in `data/tracking.json` gespeichert. Nach einem Neustart läuft sie weiter, nur die Zeit, in der der Bot offline war, wird niemandem angerechnet.
 

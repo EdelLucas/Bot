@@ -4,6 +4,7 @@ const sheets = require('./sheets');
 const tracker = require('./tracker');
 const eventFlow = require('./events');
 const commandList = require('./commands');
+const { registerCommands } = require('./register-commands');
 
 const client = new Client({
   // GuildVoiceStates: nötig, um zu sehen, wer in welchem Call ist
@@ -13,6 +14,11 @@ const commands = new Collection(commandList.map((c) => [c.data.name, c]));
 
 client.once(Events.ClientReady, async (c) => {
   console.log(`🤖 Eingeloggt als ${c.user.tag}`);
+  if (config.autoRegisterCommands) {
+    await registerCommands()
+      .then(({ count, scope }) => console.log(`✅ ${count} Slash-Commands ${scope} registriert`))
+      .catch((err) => console.error('Slash-Commands konnten nicht registriert werden:', err.message));
+  }
   await tracker.resync(c);
   eventFlow.startScheduler(c);
 });

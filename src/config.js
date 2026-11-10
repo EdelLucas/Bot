@@ -45,5 +45,6 @@ module.exports = {
     currency: optional('WAEHRUNG', '$'),
   },
   timezone: optional('ZEITZONE', 'Europe/Berlin'),
+  autoRegisterCommands: optional('COMMANDS_AUTOMATISCH_REGISTRIEREN', 'true') !== 'false',
   trackingFile: path.resolve(process.cwd(), optional('TRACKING_DATEI', 'data/tracking.json')),
 };
