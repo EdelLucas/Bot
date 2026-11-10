@@ -6,7 +6,7 @@ Der Bot muss **dauerhaft laufen**. Sonst kann er Events nicht automatisch starte
 
 | Option | Kosten | Karte nötig | Bewertung |
 |---|---|---|---|
-| **⭐ Bot-Hosting.net** | 0 € | **nein** | Am einfachsten: alles im Browser, ideal für einen Bot unter Freunden. Gratis-Server muss regelmäßig verlängert werden |
+| **⭐ Wispbyte / Bot-Hosting.net** | 0 € | **nein** | Am einfachsten: alles im Browser, ideal für einen Bot unter Freunden. Gratis-Server muss regelmäßig verlängert werden |
 | A: Google Cloud e2-micro | 0 € dauerhaft | ja (Verifizierung) | Eigener Server, läuft ohne Verlängern |
 | B: Oracle Cloud Always Free | 0 € dauerhaft | ja (Verifizierung) | Stärkerer Server, aber Oracle kann „untätige“ Gratis-Server stoppen |
 | C: Eigener PC / Raspberry Pi | nur Strom | nein | Läuft nur, solange das Gerät an ist und Internet hat |
@@ -15,9 +15,9 @@ Der Bot muss **dauerhaft laufen**. Sonst kann er Events nicht automatisch starte
 
 ---
 
-## Bot-Hosting.net (ohne Kreditkarte)
+## Wispbyte / Bot-Hosting.net (ohne Kreditkarte)
 
-Bot-Hosting.net ist ein Gratis-Hoster speziell für Discord-Bots. Man verwaltet alles über ein Web-Panel (Pterodactyl). Der Gratis-Plan ist klein, z.B. 256 MB RAM und 512 MB Speicher, reicht für diesen Bot aber.
+Wispbyte und Bot-Hosting.net sind Gratis-Hoster speziell für Discord-Bots. Man verwaltet alles über ein Web-Panel. Die Schritte sind bei beiden praktisch gleich. Der Gratis-Plan ist klein, z.B. 256 MB RAM und 512 MB Speicher, reicht für diesen Bot aber.
 
 ### Schritt 1: Dateien vorbereiten (auf deinem PC)
 1. Auf GitHub im Repo den richtigen Branch auswählen, dann **Code → Download ZIP**. Die ZIP entpacken.
@@ -28,7 +28,7 @@ Bot-Hosting.net ist ein Gratis-Hoster speziell für Discord-Bots. Man verwaltet 
    > Unter Windows sind Dateien mit Punkt am Anfang manchmal versteckt. Die `.env` kannst du auch später direkt im Panel anlegen (siehe Schritt 3).
 
 ### Schritt 2: Server anlegen
-1. <https://bot-hosting.net> öffnen → **Login mit Discord**.
+1. <https://wispbyte.com> oder <https://bot-hosting.net> öffnen → anmelden (z.B. mit Discord).
 2. Einen **kostenlosen Server** erstellen, als Sprache **Node.js** wählen.
 3. Den Server im **Panel** öffnen.
 
@@ -53,13 +53,13 @@ Im Panel unter **Startup** bzw. **Umgebung**:
 ```
 Die Slash-Commands registriert der Bot bei jedem Start selbst. `npm run deploy` braucht man hier nicht. Fertig, der Bot läuft jetzt auch, wenn dein PC aus ist.
 
-### Wichtig bei Bot-Hosting.net
-- **Verlängern nicht vergessen:** Gratis-Server müssen regelmäßig im Panel bzw. auf der Webseite verlängert werden (zuletzt alle paar Tage). Sonst wird der Server gestoppt. Am besten eine Handy-Erinnerung stellen.
+### Wichtig bei Gratis-Hostern
+- **Verlängern nicht vergessen (Bot-Hosting.net):** Gratis-Server müssen dort regelmäßig im Panel bzw. auf der Webseite verlängert werden (zuletzt alle paar Tage). Sonst wird der Server gestoppt. Am besten eine Handy-Erinnerung stellen.
 - **Updates einspielen:** Geänderte Dateien (meist nur in `src/`) über **Files** hochladen und überschreiben, dann **Restart**. `.env`, `credentials.json` und den Ordner `data/` dabei **nicht** löschen. In `data/` steckt die laufende Call-Erfassung.
 - **Nicht während eines Events neu starten**, wenn es sich vermeiden lässt. Die Minuten, in denen der Bot aus ist, zählen für niemanden.
 - **Sicherheit:** Der Hoster kann deine Dateien sehen. Deshalb das Google-Dienstkonto **nur** mit diesem einen Sheet teilen. Kommt dir etwas komisch vor, den Discord-Token im Developer Portal neu erzeugen und in der `.env` ersetzen.
 
-### Probleme bei Bot-Hosting.net
+### Probleme bei Wispbyte / Bot-Hosting.net
 | Problem | Lösung |
 |---|---|
 | `Cannot find module '/home/container/index.js'` | Unter **Dateien** prüfen: `index.js`, `package.json` und `src/` müssen **ganz oben** liegen, nicht in einem Unterordner (z.B. `Bot-main/`). Sonst den Inhalt des Unterordners nach oben verschieben |
