@@ -47,7 +47,7 @@ Wants=network-online.target
 Type=simple
 User=$RUN_USER
 WorkingDirectory=$APP_DIR
-ExecStart=$(command -v node) src/index.js
+ExecStart=$(command -v node) index.js
 Restart=always
 RestartSec=10
 Environment=NODE_ENV=production

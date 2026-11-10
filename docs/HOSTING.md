@@ -39,9 +39,9 @@ Bot-Hosting.net ist ein Gratis-Hoster speziell für Discord-Bots. Man verwaltet 
 3. Fehlt die `.env`: **New File** → Name `.env` → Inhalt von `.env.example` einfügen, ausfüllen und speichern.
 
 ### Schritt 4: Startdatei einstellen
-Im Panel unter **Startup**:
+Im Panel unter **Startup** bzw. **Umgebung**:
 - **Docker Image / Node-Version:** Node **18 oder neuer**, am besten die neueste angebotene (z.B. 22).
-- Das Feld für die Startdatei (heißt meist **MAIN FILE**, *Bot JS File* o.ä.): **`src/index.js`**
+- Startdatei (je nach Panel unter **Startup** oder **Umgebung**, heißt z.B. *STARTUP_FILE*, *MAIN FILE*): **`index.js`** lassen (Standard). Diese Datei startet den Bot in `src/`.
 - Falls es Felder wie *Git Repo Address* gibt: leer lassen. Man kann damit auch automatisch von GitHub laden, für den Anfang ist der Upload aber einfacher.
 
 ### Schritt 5: Starten
@@ -62,7 +62,7 @@ Die Slash-Commands registriert der Bot bei jedem Start selbst. `npm run deploy` 
 ### Probleme bei Bot-Hosting.net
 | Problem | Lösung |
 |---|---|
-| `Cannot find module '/home/container/index.js'` | Startdatei unter **Startup** auf `src/index.js` stellen |
+| `Cannot find module '/home/container/index.js'` | Unter **Dateien** prüfen: `index.js`, `package.json` und `src/` müssen **ganz oben** liegen, nicht in einem Unterordner (z.B. `Bot-main/`). Sonst den Inhalt des Unterordners nach oben verschieben |
 | `Cannot find module 'discord.js'` | Neu starten, damit `npm install` läuft. Prüfen, ob `package.json` ganz oben in **Files** liegt |
 | `ENOSPC` / Speicher voll | Ordner `node_modules` löschen und neu starten (wird neu installiert) |
 | Bot startet ständig neu, `JavaScript heap out of memory` | RAM zu knapp. Beim Anbieter prüfen, ob ein größerer Gratis-Plan verfügbar ist |
