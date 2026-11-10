@@ -86,6 +86,8 @@ npm run deploy           # Slash-Commands registrieren (einmalig + nach Änderun
 npm start
 ```
 
+👉 **24/7 kostenlos hosten:** siehe [docs/HOSTING.md](docs/HOSTING.md)
+
 Der Bot muss während des Events laufen, sonst kann er den Call nicht erfassen. Die laufende Erfassung wird in `data/tracking.json` gespeichert. Nach einem Neustart läuft sie weiter, nur die Zeit, in der der Bot offline war, wird niemandem angerechnet.
 
 ## Projektstruktur
