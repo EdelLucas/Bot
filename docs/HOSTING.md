@@ -63,7 +63,7 @@ Die Slash-Commands registriert der Bot bei jedem Start selbst. `npm run deploy` 
 | Problem | Lösung |
 |---|---|
 | `Cannot find module '/home/container/index.js'` | Unter **Dateien** prüfen: `index.js`, `package.json` und `src/` müssen **ganz oben** liegen, nicht in einem Unterordner (z.B. `Bot-main/`). Sonst den Inhalt des Unterordners nach oben verschieben |
-| `Cannot find module 'discord.js'` | Neu starten, damit `npm install` läuft. Prüfen, ob `package.json` ganz oben in **Files** liegt |
+| `Cannot find module 'discord.js'` oder `…/node_modules/discord.js/src/index.js` | `npm install` wurde abgebrochen (meist zu wenig RAM, `exit 137`). Ordner `node_modules` und `package-lock.json` löschen, dann neu starten. Hilft das nicht: in der Konsole `npm install --omit=dev` ausführen und danach starten |
 | `ENOSPC` / Speicher voll | Ordner `node_modules` löschen und neu starten (wird neu installiert) |
 | Bot startet ständig neu, `JavaScript heap out of memory` | RAM zu knapp. Beim Anbieter prüfen, ob ein größerer Gratis-Plan verfügbar ist |
 | Weitere Fehlermeldungen | siehe Tabelle [Probleme?](#probleme) ganz unten |

@@ -1,16 +1,9 @@
-// @googleapis/sheets statt des kompletten googleapis-Pakets: viel kleiner (wichtig für Gratis-Hoster)
-const { sheets: sheetsApi, auth: googleAuth } = require('@googleapis/sheets');
+const { createSheetsClient } = require('./google');
 const config = require('./config');
 
 let api = null;
 function client() {
-  if (!api) {
-    const auth = new googleAuth.GoogleAuth({
-      credentials: config.sheets.loadCredentials(),
-      scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-    });
-    api = sheetsApi({ version: 'v4', auth });
-  }
+  if (!api) api = createSheetsClient(config.sheets.loadCredentials());
   return api;
 }
 
