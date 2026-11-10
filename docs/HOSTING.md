@@ -6,7 +6,7 @@ Der Bot muss **dauerhaft laufen**. Sonst kann er Events nicht automatisch starte
 
 | Option | Kosten | Karte nötig | Bewertung |
 |---|---|---|---|
-| **⭐ Wispbyte / Bot-Hosting.net** | 0 € | **nein** | Am einfachsten: alles im Browser, ideal für einen Bot unter Freunden. Gratis-Server muss regelmäßig verlängert werden |
+| **⭐ Wispbyte / Bot-Hosting.net** | 0 € | **nein** | Am einfachsten: alles im Browser, ideal für einen Bot unter Freunden. Bei Bot-Hosting.net muss der Gratis-Server regelmäßig verlängert werden |
 | A: Google Cloud e2-micro | 0 € dauerhaft | ja (Verifizierung) | Eigener Server, läuft ohne Verlängern |
 | B: Oracle Cloud Always Free | 0 € dauerhaft | ja (Verifizierung) | Stärkerer Server, aber Oracle kann „untätige“ Gratis-Server stoppen |
 | C: Eigener PC / Raspberry Pi | nur Strom | nein | Läuft nur, solange das Gerät an ist und Internet hat |
