@@ -12,19 +12,40 @@ function required(name) {
 
 const optional = (name, fallback = null) => process.env[name]?.trim() || fallback;
 
+/** Sucht im Projektordner eine JSON-Datei mit einem Google-Dienstkonto-Schlüssel (egal wie sie heißt). */
+function findServiceAccountFile(dir) {
+  for (const name of fs.readdirSync(dir)) {
+    if (!name.endsWith('.json') || name.startsWith('package')) continue;
+    try {
+      const data = JSON.parse(fs.readFileSync(path.join(dir, name), 'utf8'));
+      if (data.type === 'service_account' && data.private_key) return path.join(dir, name);
+    } catch { /* keine gültige JSON-Datei */ }
+  }
+  return null;
+}
+
 function loadGoogleCredentials() {
-  if (process.env.GOOGLE_CREDENTIALS_JSON) {
+  if (process.env.GOOGLE_CREDENTIALS_JSON?.trim()) {
     return JSON.parse(process.env.GOOGLE_CREDENTIALS_JSON);
   }
   const file = optional('GOOGLE_CREDENTIALS_FILE', './credentials.json');
-  const resolved = path.resolve(process.cwd(), file);
+  let resolved = path.resolve(process.cwd(), file);
   if (!fs.existsSync(resolved)) {
-    throw new Error(
-      `Google-Zugangsdaten nicht gefunden (${resolved}). ` +
-        'Setze GOOGLE_CREDENTIALS_FILE oder GOOGLE_CREDENTIALS_JSON.',
-    );
+    const found = findServiceAccountFile(process.cwd());
+    if (!found) {
+      throw new Error(
+        `Google-Schlüssel nicht gefunden. Lade die JSON-Datei des Dienstkontos als "credentials.json" ` +
+          `in den Hauptordner (${process.cwd()}) hoch – siehe README, Abschnitt "Google Sheet anbinden".`,
+      );
+    }
+    console.log(`🔑 Google-Schlüssel gefunden: ${path.basename(found)}`);
+    resolved = found;
   }
-  return JSON.parse(fs.readFileSync(resolved, 'utf8'));
+  const data = JSON.parse(fs.readFileSync(resolved, 'utf8'));
+  if (data.type !== 'service_account') {
+    throw new Error(`${path.basename(resolved)} ist kein Dienstkonto-Schlüssel (erwartet "type": "service_account").`);
+  }
+  return data;
 }
 
 module.exports = {
