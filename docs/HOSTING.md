@@ -47,9 +47,9 @@ Im Panel unter **Startup** bzw. **Umgebung**:
 ### Schritt 5: Starten
 **Console → Start.** Beim ersten Start installiert das Panel die Pakete selbst (`npm install`), das dauert etwas. Danach sollte erscheinen:
 ```
-📊 Google Sheet verbunden: https://docs.google.com/...
+🔑 Google-Dienstkonto: bot@….iam.gserviceaccount.com
 🤖 Eingeloggt als DeinBot#1234
-✅ 4 Slash-Commands auf dem Server registriert
+✅ 5 Slash-Commands für alle Server registriert
 ```
 Die Slash-Commands registriert der Bot bei jedem Start selbst. `npm run deploy` braucht man hier nicht. Fertig, der Bot läuft jetzt auch, wenn dein PC aus ist.
 
@@ -171,6 +171,6 @@ Nachteil: Strom (ein Pi braucht ca. 3–5 W, also wenige Euro im Jahr). Und wenn
 | Logs: `Umgebungsvariable … fehlt` | `.env` unvollständig. `nano ~/Bot/.env`, dann neu starten. |
 | Logs: `The caller does not have permission` | Sheet ist nicht mit der E-Mail-Adresse des Dienstkontos als **Bearbeiter** geteilt. |
 | Logs: `An invalid token was provided` | `DISCORD_TOKEN` falsch oder im Developer Portal neu generiert. |
-| Slash-Commands erscheinen nicht | `DISCORD_GUILD_ID` in der `.env` setzen, Bot neu starten, Discord neu laden (`Strg+R`). |
+| Slash-Commands erscheinen nicht | Ein paar Minuten warten, dann Discord neu laden (`Strg+R`). Prüfen, ob der Bot mit dem Scope `applications.commands` eingeladen wurde. |
 | Bot zählt niemanden im Call | Bot braucht die Berechtigung „Kanal ansehen“ für den Voice-Kanal. |
 | Google schickt Budget-Warnung | VM-Einstellungen prüfen: Region us-…, e2-micro, Standard-Festplatte, keine statische IP. |

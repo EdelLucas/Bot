@@ -1,6 +1,7 @@
 const { Client, GatewayIntentBits, Events, Collection } = require('discord.js');
 const config = require('./config');
 const sheets = require('./sheets');
+const servers = require('./servers');
 const tracker = require('./tracker');
 const eventFlow = require('./events');
 const commandList = require('./commands');
@@ -19,8 +20,31 @@ client.once(Events.ClientReady, async (c) => {
       .then(({ count, scope }) => console.log(`✅ ${count} Slash-Commands ${scope} registriert`))
       .catch((err) => console.error('Slash-Commands konnten nicht registriert werden:', err.message));
   }
+  console.log(`🌐 Auf ${c.guilds.cache.size} Server(n), davon ${servers.configuredGuildIds().length} mit Sheet eingerichtet`);
+
+  // Sheets der eingerichteten Server schon jetzt verbinden (spart Zeit beim ersten Befehl)
+  for (const guildId of servers.configuredGuildIds()) {
+    sheets.forGuild(guildId)
+      .then(() => console.log(`📊 Sheet für ${c.guilds.cache.get(guildId)?.name ?? guildId} verbunden`))
+      .catch((err) => console.error(`⚠️ Sheet für Server ${guildId} nicht erreichbar:`, err.message));
+  }
   await tracker.resync(c);
   eventFlow.startScheduler(c);
+});
+
+// Begrüßung, wenn der Bot auf einen neuen Server eingeladen wird
+client.on(Events.GuildCreate, async (guild) => {
+  console.log(`➕ Neuer Server: ${guild.name} (${guild.id})`);
+  const channel = guild.systemChannel;
+  if (!channel?.permissionsFor(guild.members.me)?.has('SendMessages')) return;
+  const email = sheets.serviceAccountEmail();
+  await channel.send(
+    '👋 Hi! Ich verwalte Events und Auszahlungen in einem Google Sheet.\n' +
+    '**Einrichten (für Admins):**\n' +
+    '1. Ein Google Sheet erstellen und ' + (email ? `mit \`${email}\`` : 'mit der Bot-E-Mail') + ' als **Bearbeiter** teilen\n' +
+    '2. `/setup sheet link:<Link zum Sheet>`\n' +
+    '3. Optional: `/setup kanal` (Ankündigungen) und `/setup adminrolle`',
+  ).catch(() => {});
 });
 
 client.on(Events.VoiceStateUpdate, (oldState, newState) => {
@@ -54,8 +78,9 @@ client.on(Events.InteractionCreate, async (interaction) => {
 });
 
 (async () => {
-  await sheets.init();
-  console.log(`📊 Google Sheet verbunden: ${sheets.url()}`);
+  const email = sheets.serviceAccountEmail();
+  if (email) console.log(`🔑 Google-Dienstkonto: ${email} (mit dieser Adresse die Sheets teilen)`);
+  else console.warn('⚠️ Kein Google-Schlüssel gefunden – Sheets funktionieren erst mit credentials.json.');
   await client.login(config.discord.token);
 })().catch((err) => {
   console.error('Start fehlgeschlagen:', err);

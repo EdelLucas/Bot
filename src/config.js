@@ -24,7 +24,15 @@ function findServiceAccountFile(dir) {
   return null;
 }
 
+let cachedCredentials = null;
+
 function loadGoogleCredentials() {
+  if (cachedCredentials) return cachedCredentials;
+  cachedCredentials = readGoogleCredentials();
+  return cachedCredentials;
+}
+
+function readGoogleCredentials() {
   if (process.env.GOOGLE_CREDENTIALS_JSON?.trim()) {
     return JSON.parse(process.env.GOOGLE_CREDENTIALS_JSON);
   }
@@ -57,7 +65,8 @@ module.exports = {
     announceChannelId: optional('ANKUENDIGUNG_KANAL_ID'),
   },
   sheets: {
-    get sheetId() { return required('GOOGLE_SHEET_ID'); },
+    // Nur Vorgabe für den Server DISCORD_GUILD_ID – andere Server richten ihr Sheet mit /setup ein
+    defaultSheetId: optional('GOOGLE_SHEET_ID'),
     loadCredentials: loadGoogleCredentials,
   },
   payout: {
@@ -67,5 +76,6 @@ module.exports = {
   },
   timezone: optional('ZEITZONE', 'Europe/Berlin'),
   autoRegisterCommands: optional('COMMANDS_AUTOMATISCH_REGISTRIEREN', 'true') !== 'false',
+  dataDir: path.resolve(process.cwd(), optional('DATEN_ORDNER', 'data')),
   trackingFile: path.resolve(process.cwd(), optional('TRACKING_DATEI', 'data/tracking.json')),
 };

@@ -1,5 +1,6 @@
 const { SlashCommandBuilder } = require('discord.js');
-const { tables, PAYOUT } = require('../sheets');
+const sheets = require('../sheets');
+const { PAYOUT } = sheets;
 const { isAdmin } = require('../permissions');
 const { formatDate } = require('../format');
 
@@ -20,6 +21,7 @@ module.exports = {
 
   async execute(interaction) {
     const sub = interaction.options.getSubcommand();
+    const tables = await sheets.forGuild(interaction.guildId);
     const target = interaction.options.getUser('benutzer') ?? interaction.user;
 
     if (sub === 'anzeigen') {

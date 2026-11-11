@@ -1,12 +1,13 @@
 const { PermissionFlagsBits } = require('discord.js');
-const config = require('./config');
+const servers = require('./servers');
 
-/** Admin = Berechtigung "Server verwalten" oder die Rolle aus ADMIN_ROLE_ID. */
+/** Admin = Berechtigung "Server verwalten" oder die per /setup festgelegte Admin-Rolle. */
 function isAdmin(interaction) {
   if (interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) return true;
+  const { adminRoleId } = servers.get(interaction.guildId);
   const roles = interaction.member?.roles;
-  if (!config.discord.adminRoleId || !roles) return false;
-  return Array.isArray(roles) ? roles.includes(config.discord.adminRoleId) : roles.cache.has(config.discord.adminRoleId);
+  if (!adminRoleId || !roles) return false;
+  return Array.isArray(roles) ? roles.includes(adminRoleId) : roles.cache.has(adminRoleId);
 }
 
 async function denyUnlessAdmin(interaction) {

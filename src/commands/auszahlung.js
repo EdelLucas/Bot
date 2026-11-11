@@ -1,5 +1,6 @@
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
-const { tables, byId, PAYOUT, url } = require('../sheets');
+const sheets = require('../sheets');
+const { byId, PAYOUT } = sheets;
 const { denyUnlessAdmin } = require('../permissions');
 const { formatDate, money, clip } = require('../format');
 
@@ -52,6 +53,7 @@ module.exports = {
 
   async autocomplete(interaction) {
     const typed = interaction.options.getFocused().toLowerCase();
+    const tables = await sheets.forGuild(interaction.guildId);
     const events = (await tables.events.readAll())
       .sort((a, b) => Number(b['Start (Unix)']) - Number(a['Start (Unix)']));
     const names = [...new Set(events.map((e) => String(e.Name)))].filter((n) => n.toLowerCase().includes(typed));
@@ -60,7 +62,9 @@ module.exports = {
 
   async execute(interaction) {
     const sub = interaction.options.getSubcommand();
-    if (sub === 'meine') return meine(interaction);
+    const tables = await sheets.forGuild(interaction.guildId);
+    const url = () => sheets.url(interaction.guildId);
+    if (sub === 'meine') return meine(interaction, tables);
     if (await denyUnlessAdmin(interaction)) return;
 
     if (sub === 'hinzufuegen') {
@@ -165,7 +169,7 @@ module.exports = {
   },
 };
 
-async function meine(interaction) {
+async function meine(interaction, tables) {
   await interaction.deferReply({ ephemeral: true });
   const [player] = await tables.spieler.find((p) => String(p['Discord-ID']) === interaction.user.id);
   const rows = (await tables.auszahlungen.readAll()).filter((r) =>

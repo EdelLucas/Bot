@@ -1,5 +1,6 @@
 const { createSheetsClient } = require('./google');
 const config = require('./config');
+const servers = require('./servers');
 
 let api = null;
 function client() {
@@ -29,7 +30,8 @@ function colLetter(index) {
 
 /** Ein Tabellenblatt im Sheet. Jede Zeile wird als Objekt { Spaltenname: Wert, _row } gelesen. */
 class Table {
-  constructor(title, columns, { autoId = true } = {}) {
+  constructor(spreadsheetId, title, columns, { autoId = true } = {}) {
+    this.spreadsheetId = spreadsheetId;
     this.title = title;
     this.columns = columns;
     this.autoId = autoId; // Spalte "ID" automatisch hochzählen
@@ -47,7 +49,7 @@ class Table {
 
   async readAll() {
     const res = await client().spreadsheets.values.get({
-      spreadsheetId: config.sheets.sheetId,
+      spreadsheetId: this.spreadsheetId,
       range: this.range(`A2:${this.lastCol}`),
       valueRenderOption: 'UNFORMATTED_VALUE',
     });
@@ -71,7 +73,7 @@ class Table {
       let next = existing.reduce((m, e) => Math.max(m, parseInt(e.ID, 10) || 0), 0) + 1;
       const entries = items.map((item) => (this.autoId ? { ...item, ID: next++ } : { ...item }));
       await client().spreadsheets.values.append({
-        spreadsheetId: config.sheets.sheetId,
+        spreadsheetId: this.spreadsheetId,
         range: this.range('A1'),
         valueInputOption: 'RAW', // RAW verhindert, dass Nutzer Formeln einschleusen
         insertDataOption: 'INSERT_ROWS',
@@ -92,7 +94,7 @@ class Table {
       if (!matches.length) return [];
       const updated = matches.map((e) => ({ ...e, ...(typeof changes === 'function' ? changes(e) : changes) }));
       await client().spreadsheets.values.batchUpdate({
-        spreadsheetId: config.sheets.sheetId,
+        spreadsheetId: this.spreadsheetId,
         requestBody: {
           valueInputOption: 'RAW',
           data: updated.map((e) => ({ range: this.range(`A${e._row}`), values: [this.toRow(e)] })),
@@ -115,7 +117,7 @@ class Table {
             range: { sheetId: this.sheetId, dimension: 'ROWS', startIndex: e._row - 1, endIndex: e._row },
           },
         }));
-      await client().spreadsheets.batchUpdate({ spreadsheetId: config.sheets.sheetId, requestBody: { requests } });
+      await client().spreadsheets.batchUpdate({ spreadsheetId: this.spreadsheetId, requestBody: { requests } });
       return matches;
     });
   }
@@ -124,22 +126,21 @@ class Table {
 const PAYOUT = { OFFEN: 'Offen', AUSGEZAHLT: 'Ausgezahlt', ID_FEHLT: 'ID fehlt' };
 const EVENT = { GEPLANT: 'Geplant', LAEUFT: 'Läuft', BEENDET: 'Beendet', ABGEBROCHEN: 'Abgebrochen' };
 
-const tables = {
-  auszahlungen: new Table('Auszahlungen', [
+const SCHEMA = {
+  auszahlungen: ['Auszahlungen', [
     'ID', 'Datum', 'Event-ID', 'Event', 'Spieler-ID', 'Discord-Name', 'Discord-ID', 'Summe',
     'Anwesenheit (Min)', 'Status', 'Quelle', 'Eingetragen von', 'Ausgezahlt am',
-  ]),
-  events: new Table('Events', [
+  ]],
+  events: ['Events', [
     'ID', 'Name', 'Start', 'Start (Unix)', 'Dauer (Min)', 'Min. Minuten', 'Summe', 'Voice-Kanal-ID',
     'Voice-Kanal', 'Post-Kanal-ID', 'Nachricht-ID', 'Status', 'Teilnehmer', 'Erstellt von', 'Beschreibung',
-  ]),
-  spieler: new Table('Spieler', ['Discord-ID', 'Discord-Name', 'Spieler-ID', 'Aktualisiert'], { autoId: false }),
+  ]],
+  spieler: ['Spieler', ['Discord-ID', 'Discord-Name', 'Spieler-ID', 'Aktualisiert'], { autoId: false }],
 };
 
-/** Legt fehlende Tabellenblätter und Kopfzeilen an. Beim Start einmal aufrufen. */
-async function init() {
+/** Legt fehlende Tabellenblätter und Kopfzeilen in einem Sheet an. */
+async function initTables(spreadsheetId, tables) {
   const sheets = client();
-  const spreadsheetId = config.sheets.sheetId;
   const meta = await sheets.spreadsheets.get({ spreadsheetId, fields: 'sheets.properties' });
   const existing = new Map(meta.data.sheets.map((s) => [s.properties.title, s.properties.sheetId]));
   const all = Object.values(tables);
@@ -171,10 +172,51 @@ async function init() {
   }
 }
 
-const byId = (id) => (e) => String(e.ID) === String(id);
+// pro Sheet nur einmal initialisieren
+const cache = new Map();
 
-function url() {
-  return `https://docs.google.com/spreadsheets/d/${config.sheets.sheetId}/edit`;
+/** Tabellen eines Sheets (legt beim ersten Zugriff fehlende Blätter an). */
+function forSheet(spreadsheetId) {
+  if (!cache.has(spreadsheetId)) {
+    const tables = Object.fromEntries(
+      Object.entries(SCHEMA).map(([key, [title, cols, opts]]) => [key, new Table(spreadsheetId, title, cols, opts)]));
+    const ready = initTables(spreadsheetId, tables).then(() => tables);
+    ready.catch(() => cache.delete(spreadsheetId)); // bei Fehler beim nächsten Mal neu versuchen
+    cache.set(spreadsheetId, ready);
+  }
+  return cache.get(spreadsheetId);
 }
 
-module.exports = { tables, init, url, byId, PAYOUT, EVENT };
+/** Tabellen des Sheets, das für diesen Discord-Server eingerichtet ist. */
+function forGuild(guildId) {
+  const { sheetId } = servers.get(guildId);
+  if (!sheetId) {
+    return Promise.reject(new Error('Für diesen Server ist noch kein Google Sheet eingerichtet. Ein Admin muss zuerst `/setup sheet` ausführen.'));
+  }
+  return forSheet(sheetId);
+}
+
+/** E-Mail-Adresse des Google-Dienstkontos – mit ihr muss jedes Sheet geteilt werden. */
+function serviceAccountEmail() {
+  try {
+    return config.sheets.loadCredentials().client_email;
+  } catch {
+    return null;
+  }
+}
+
+/** Liest die Sheet-ID aus einem Link oder nimmt die ID direkt. */
+function parseSheetId(input) {
+  const m = String(input).match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/);
+  if (m) return m[1];
+  return /^[a-zA-Z0-9_-]{20,}$/.test(input.trim()) ? input.trim() : null;
+}
+
+const byId = (id) => (e) => String(e.ID) === String(id);
+
+function url(sheetIdOrGuildId) {
+  const id = servers.get(sheetIdOrGuildId).sheetId || sheetIdOrGuildId;
+  return `https://docs.google.com/spreadsheets/d/${id}/edit`;
+}
+
+module.exports = { forSheet, forGuild, url, byId, parseSheetId, serviceAccountEmail, PAYOUT, EVENT };

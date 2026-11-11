@@ -1,5 +1,7 @@
 const { SlashCommandBuilder, EmbedBuilder, ChannelType } = require('discord.js');
-const { tables, byId, EVENT } = require('../sheets');
+const sheets = require('../sheets');
+const { byId, EVENT } = sheets;
+const servers = require('../servers');
 const { denyUnlessAdmin } = require('../permissions');
 const { parseDateTime, formatDate, discordTs, money, minutes, clip } = require('../format');
 const events = require('../events');
@@ -47,6 +49,7 @@ module.exports = {
   async autocomplete(interaction) {
     const allowed = AUTOCOMPLETE_STATUS[interaction.options.getSubcommand()] ?? Object.values(EVENT);
     const typed = String(interaction.options.getFocused()).toLowerCase();
+    const tables = await sheets.forGuild(interaction.guildId);
     const list = (await tables.events.readAll())
       .filter((e) => allowed.includes(e.Status))
       .map((e) => ({ name: `#${e.ID} ${e.Name} (${e.Start})`.slice(0, 100), value: Number(e.ID) }))
@@ -56,12 +59,13 @@ module.exports = {
 
   async execute(interaction) {
     const sub = interaction.options.getSubcommand();
-    if (sub === 'liste') return liste(interaction);
+    const tables = await sheets.forGuild(interaction.guildId);
+    if (sub === 'liste') return liste(interaction, tables);
     if (await denyUnlessAdmin(interaction)) return;
-    if (sub === 'ankuendigen') return ankuendigen(interaction);
+    if (sub === 'ankuendigen') return ankuendigen(interaction, tables);
 
     await interaction.deferReply({ ephemeral: true });
-    const ev = await events.getEvent(interaction.options.getInteger('event'));
+    const ev = await events.getEvent(interaction.guildId, interaction.options.getInteger('event'));
     if (!ev) return interaction.editReply('Dieses Event gibt es nicht.');
 
     if (sub === 'start') {
@@ -71,13 +75,13 @@ module.exports = {
     }
 
     if (sub === 'ende') {
-      if (!tracker.get(ev.ID)) return interaction.editReply(`Event #${ev.ID} läuft gerade nicht.`);
+      if (!tracker.get(events.trackKey(ev))) return interaction.editReply(`Event #${ev.ID} läuft gerade nicht.`);
       const { embed } = await events.endEvent(interaction.client, ev, interaction.user.username);
       return interaction.editReply({ embeds: [embed], allowedMentions: { parse: [] } });
     }
 
     if (sub === 'teilnehmer') {
-      const snap = tracker.snapshot(ev.ID);
+      const snap = tracker.snapshot(events.trackKey(ev));
       if (!snap) return interaction.editReply(`Event #${ev.ID} läuft gerade nicht.`);
       const minMs = events.minAttendanceMs(ev, snap.durationMs);
       const lines = snap.users
@@ -100,7 +104,7 @@ module.exports = {
   },
 };
 
-async function ankuendigen(interaction) {
+async function ankuendigen(interaction, tables) {
   const o = interaction.options;
   const startMs = parseDateTime(o.getString('start'));
   if (!startMs) {
@@ -113,8 +117,9 @@ async function ankuendigen(interaction) {
 
   const call = o.getChannel('call');
   let postChannel = o.getChannel('post_kanal');
-  if (!postChannel && config.discord.announceChannelId) {
-    postChannel = await interaction.client.channels.fetch(config.discord.announceChannelId).catch(() => null);
+  const { announceChannelId } = servers.get(interaction.guildId);
+  if (!postChannel && announceChannelId) {
+    postChannel = await interaction.client.channels.fetch(announceChannelId).catch(() => null);
   }
   postChannel ??= interaction.channel ?? (await interaction.client.channels.fetch(interaction.channelId));
 
@@ -173,7 +178,7 @@ async function ankuendigen(interaction) {
   );
 }
 
-async function liste(interaction) {
+async function liste(interaction, tables) {
   await interaction.deferReply();
   const alle = interaction.options.getBoolean('alle') ?? false;
   const list = (await tables.events.readAll())
