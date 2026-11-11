@@ -3,7 +3,7 @@ const path = require('node:path');
 
 // .env einlesen – tolerant, weil die Datei oft am Handy/Tablet angelegt wird:
 // erlaubt "KEY=wert" und "KEY: wert", Anführungszeichen, Leerzeichen und die Namen env / .env.txt / env.txt
-const ENV_FILES = ['.env', 'env', '.env.txt', 'env.txt', '.env.example.txt'];
+const ENV_FILES = ['.env', 'env', '.env.txt', 'env.txt'];
 function loadEnvFiles() {
   for (const name of ENV_FILES) {
     const file = path.join(process.cwd(), name);
