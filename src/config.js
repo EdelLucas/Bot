@@ -89,8 +89,6 @@ module.exports = {
     announceChannelId: optional('ANKUENDIGUNG_KANAL_ID'),
   },
   sheets: {
-    // Nur Vorgabe für den Server DISCORD_GUILD_ID – andere Server richten ihr Sheet mit /setup ein
-    defaultSheetId: optional('GOOGLE_SHEET_ID'),
     loadCredentials: loadGoogleCredentials,
   },
   payout: {

@@ -1,13 +1,14 @@
 const { SlashCommandBuilder } = require('discord.js');
-const sheets = require('../sheets');
 const servers = require('../servers');
 
 module.exports = {
-  data: new SlashCommandBuilder().setName('sheet').setDescription('Link zum Google Sheet dieses Servers').setDMPermission(false),
+  data: new SlashCommandBuilder().setName('sheet').setDescription('Link zur Auszahlungsliste dieses Servers').setDMPermission(false),
   async execute(interaction) {
-    const { sheetId } = servers.get(interaction.guildId);
+    const { sheetId, tab } = servers.get(interaction.guildId);
     await interaction.reply({
-      content: sheetId ? `📊 ${sheets.url(sheetId)}` : 'Für diesen Server ist noch kein Sheet eingerichtet (`/setup sheet`).',
+      content: sheetId
+        ? `📊 https://docs.google.com/spreadsheets/d/${sheetId}/edit (Blatt „${tab}“)`
+        : 'Für diesen Server ist noch keine Liste eingerichtet (`/setup sheet`).',
       ephemeral: true,
     });
   },

@@ -1,66 +1,90 @@
 const { SlashCommandBuilder } = require('discord.js');
 const sheets = require('../sheets');
-const { PAYOUT } = sheets;
-const { isAdmin } = require('../permissions');
-const { formatDate } = require('../format');
+const servers = require('../servers');
+const events = require('../events');
+const { isAdmin, denyUnlessAdmin } = require('../permissions');
+const { currentList, playerChoices, requirePlayer } = require('../lookup');
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('id')
-    .setDescription('Spieler-ID für Auszahlungen hinterlegen')
+    .setDescription('Dein Discord-Konto mit deinem Eintrag in der Liste verknüpfen')
     .setDMPermission(false)
     .addSubcommand((s) => s
       .setName('setzen')
-      .setDescription('Deine Spieler-ID hinterlegen (Admins: auch für andere)')
-      .addStringOption((o) => o.setName('spieler_id').setDescription('Deine Spieler-ID').setRequired(true).setMaxLength(50))
+      .setDescription('Wähle dich in der Liste aus (Admins: auch für andere)')
+      .addStringOption((o) => o.setName('spieler').setDescription('Name oder ID tippen und auswählen').setRequired(true).setAutocomplete(true))
       .addUserOption((o) => o.setName('benutzer').setDescription('Nur Admins: für wen?')))
     .addSubcommand((s) => s
       .setName('anzeigen')
-      .setDescription('Hinterlegte Spieler-ID anzeigen')
-      .addUserOption((o) => o.setName('benutzer').setDescription('Wessen ID? (Standard: deine)'))),
+      .setDescription('Mit wem ist ein Discord-Konto verknüpft?')
+      .addUserOption((o) => o.setName('benutzer').setDescription('Standard: du')))
+    .addSubcommand((s) => s
+      .setName('hinzufuegen')
+      .setDescription('Admins: neuen Spieler unten in die Liste eintragen')
+      .addStringOption((o) => o.setName('name').setDescription('Name, z.B. Max Muster').setRequired(true).setMaxLength(80))
+      .addStringOption((o) => o.setName('spieler_id').setDescription('Spieler-ID (Zahl)').setRequired(true).setMaxLength(20))
+      .addUserOption((o) => o.setName('benutzer').setDescription('Optional: gleich mit diesem Discord-Konto verknüpfen'))),
+
+  async autocomplete(interaction) {
+    const liste = await currentList(interaction.guildId);
+    await interaction.respond(playerChoices(liste, interaction.options.getFocused()));
+  },
 
   async execute(interaction) {
     const sub = interaction.options.getSubcommand();
-    const tables = await sheets.forGuild(interaction.guildId);
+    const guildId = interaction.guildId;
     const target = interaction.options.getUser('benutzer') ?? interaction.user;
+    const member = interaction.options.getMember('benutzer') ?? interaction.member;
 
     if (sub === 'anzeigen') {
-      const [p] = await tables.spieler.find((e) => String(e['Discord-ID']) === target.id);
-      return interaction.reply({
-        content: p ? `🆔 ${target} hat die Spieler-ID \`${p['Spieler-ID']}\`.` : `${target} hat noch keine Spieler-ID hinterlegt.`,
-        ephemeral: true,
+      await interaction.deferReply({ ephemeral: true });
+      const liste = await currentList(guildId);
+      const p = events.resolvePlayer(liste, guildId, { id: target.id, name: member?.displayName ?? target.username });
+      const linked = servers.getPlayerId(guildId, target.id);
+      return interaction.editReply({
+        content: p
+          ? `🆔 ${target} ist **${p.label}**${linked ? '' : ' (automatisch über den Namen erkannt)'}.`
+          : `${target} ist noch mit keinem Eintrag in der Liste verknüpft → \`/id setzen\`.`,
         allowedMentions: { parse: [] },
       });
     }
 
+    if (sub === 'hinzufuegen') {
+      if (await denyUnlessAdmin(interaction)) return;
+      const name = interaction.options.getString('name').trim();
+      const spielerId = interaction.options.getString('spieler_id').trim();
+      if (!/^\d+$/.test(spielerId)) return interaction.reply({ content: '⛔ Die Spieler-ID muss eine Zahl sein.', ephemeral: true });
+      await interaction.deferReply({ ephemeral: true });
+      const { sheetId, tab } = servers.sheetOf(guildId);
+      const added = await sheets.appendPlayer(sheetId, tab, name, spielerId);
+      const linkUser = interaction.options.getUser('benutzer');
+      if (linkUser) servers.setPlayerId(guildId, linkUser.id, spielerId);
+      return interaction.editReply(`✅ **${name} | ${spielerId}** in Zeile ${added.row} eingetragen${linkUser ? ` und mit ${linkUser} verknüpft` : ''}.`);
+    }
+
+    // setzen
     const admin = isAdmin(interaction);
     if (target.id !== interaction.user.id && !admin) {
-      return interaction.reply({ content: '⛔ Nur Admins können die ID für andere setzen.', ephemeral: true });
+      return interaction.reply({ content: '⛔ Nur Admins können andere verknüpfen.', ephemeral: true });
     }
     await interaction.deferReply({ ephemeral: true });
-    const spielerId = interaction.options.getString('spieler_id').trim();
-    const member = interaction.options.getMember('benutzer') ?? interaction.member;
-    const name = member?.displayName ?? target.username;
+    const liste = await currentList(guildId);
+    const player = requirePlayer(liste, interaction.options.getString('spieler'));
+    if (!player.id) return interaction.editReply('⛔ Dieser Eintrag hat keine Spieler-ID in der Liste.');
 
-    const taken = await tables.spieler.find(
-      (e) => String(e['Spieler-ID']) === spielerId && String(e['Discord-ID']) !== target.id);
-    if (taken.length && !admin) {
-      return interaction.editReply(`⛔ Die Spieler-ID \`${spielerId}\` ist schon einem anderen Discord-Konto zugeordnet. Melde dich bei einem Admin.`);
+    const others = servers.discordIdsOf(guildId, player.id).filter((id) => id !== target.id);
+    if (others.length && !admin) {
+      return interaction.editReply(`⛔ **${player.label}** ist schon mit einem anderen Discord-Konto verknüpft. Melde dich bei einem Admin.`);
     }
+    servers.setPlayerId(guildId, target.id, player.id);
+    const nachgetragen = await events.creditPending(guildId, target.id);
 
-    const data = { 'Discord-ID': target.id, 'Discord-Name': name, 'Spieler-ID': spielerId, Aktualisiert: formatDate() };
-    const updated = await tables.spieler.update((e) => String(e['Discord-ID']) === target.id, data);
-    if (!updated.length) await tables.spieler.add(data);
-
-    // offene Auszahlungen dieser Person (auch die mit fehlender ID) auf die neue ID setzen
-    const fixed = await tables.auszahlungen.update(
-      (e) => String(e['Discord-ID']) === target.id && [PAYOUT.OFFEN, PAYOUT.ID_FEHLT].includes(e.Status),
-      { 'Spieler-ID': spielerId, Status: PAYOUT.OFFEN });
-
-    await interaction.editReply(
-      `✅ Spieler-ID \`${spielerId}\` für ${target} gespeichert.` +
-      (fixed.length ? `\n${fixed.length} offene Auszahlung(en) wurden aktualisiert.` : '') +
-      (taken.length ? `\n⚠️ Hinweis: Die ID ist auch bei ${taken.map((t) => `<@${t['Discord-ID']}>`).join(', ')} hinterlegt.` : ''),
-    );
+    await interaction.editReply({
+      content: `✅ ${target} ist jetzt **${player.label}**.` +
+        (nachgetragen.length ? `\n${nachgetragen.length} Event-Teilnahme(n) wurden nachgetragen.` : '') +
+        (others.length ? `\n⚠️ Hinweis: Auch ${others.map((id) => `<@${id}>`).join(', ')} ist mit diesem Eintrag verknüpft.` : ''),
+      allowedMentions: { parse: [] },
+    });
   },
 };

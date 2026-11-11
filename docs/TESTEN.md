@@ -4,7 +4,7 @@ Alles geht im Browser des Tablets und in der Discord-App, einen PC brauchst du n
 
 **Überblick:**
 1. Discord-Bot vorbereiten (5 Min)
-2. Google-Schlüssel und Sheet (10 Min)
+2. Google-Schlüssel und Freigabe der Liste (10 Min)
 3. Bot starten: **Weg A** (Wispbyte, geht mit jedem Tablet, auch iPad) **oder Weg B** (Termux, nur Android)
 4. In Discord testen (10 Min)
 
@@ -31,10 +31,12 @@ Alles geht im Browser des Tablets und in der Discord-App, einen PC brauchst du n
 5. Auf das neue Dienstkonto tippen → Tab **Schlüssel** → **Schlüssel hinzufügen** → **Neuen Schlüssel erstellen** → **JSON** → Erstellen. Die Datei landet in deinen Downloads.
 6. Die E-Mail des Dienstkontos notieren, die sieht so aus: `bot@discord-bot-12345.iam.gserviceaccount.com`. Das ist die **Bot-E-Mail**.
 
-**Sheet:**
-1. <https://sheets.new> öffnen (oder die Google-Sheets-App) → leeres Sheet, z.B. „Auszahlungen Test“.
-2. **Teilen** → Bot-E-Mail eintragen → Rolle **Bearbeiter** → Senden. Den Hinweis „keine Benachrichtigung möglich“ einfach bestätigen.
-3. Den **Link** des Sheets kopieren (in die Notiz).
+**Liste freigeben:**
+1. Dein Google Sheet mit der Auszahlungsliste öffnen.
+2. **Teilen** → Bot-E-Mail eintragen → Rolle **Bearbeiter** → Senden.
+3. Zum Blatt mit der Liste wechseln (Tab unten) und den **Link** aus der Adresszeile kopieren. Er endet auf `#gid=…`, damit weiß der Bot, welches Blatt gemeint ist.
+
+> Tipp: Zum ersten Testen eine **Kopie** der Liste verwenden (Datei → Kopie erstellen), dann kann in der echten Liste nichts schiefgehen.
 
 ---
 
@@ -100,32 +102,33 @@ In der Discord-App `/` tippen. Dann erscheinen die Befehle des Bots, einfach ant
 ### a) Server einrichten
 | Schritt | Befehl | Erwartet |
 |---|---|---|
-| 1 | `/setup info` | Zeigt die Bot-E-Mail, Sheet „nicht eingerichtet“ |
-| 2 | `/setup sheet link:` *Sheet-Link einfügen* | ✅ Sheet verbunden. Im Sheet gibt es jetzt die Blätter **Auszahlungen, Events, Spieler** |
+| 1 | `/setup info` | Zeigt die Bot-E-Mail, Liste „nicht eingerichtet“ |
+| 2 | `/setup sheet link:` *Link vom Blatt mit der Liste* | ✅ Liste verbunden, mit Anzeige der erkannten Spieler und Event-Spalten mit Beträgen |
 | 3 | `/setup kanal kanal:` *#dein-ankündigungskanal* | ✅ Events werden ab jetzt in … angekündigt |
 
-### b) Spieler-ID
-| 4 | `/id setzen spieler_id:12345` | ✅ gespeichert. Im Sheet-Blatt **Spieler** steht eine Zeile |
+### b) Dich in der Liste verknüpfen
+| 4 | `/id setzen spieler:` *deinen Namen tippen und auswählen* | ✅ @du ist jetzt **Name \| ID** |
 |---|---|---|
 
 ### c) Test-Event (dauert 5 Minuten)
 5. **Geh in einen Voice-Kanal.**
 6. Schau auf die Uhr und nimm **die nächste volle Minute + 1**. Ist es z.B. 14:37, nimm `14:39`.
    ```
-   /event ankuendigen name:Test start:14:39 summe:100 call:#dein-voice dauer:3 min_minuten:1
+   /event ankuendigen art:Panel/plantage 10k start:14:39 call:#dein-voice dauer:3 min_minuten:1
    ```
-   → Im Ankündigungskanal erscheint die Ankündigung. Im Blatt **Events** steht das Event mit Status „Geplant“.
-7. Bis zu 1 Minute nach der Startzeit: „▶️ **Test** hat begonnen!“ erscheint.
-8. `/event teilnehmer event:` *#1 Test wählen* → du stehst drin, mit ✅ nach 1 Minute.
-9. Im Call bleiben. Etwa 3 Minuten nach dem Start: „🏁 **Test** ist beendet“ mit dir in der Liste.
-10. Im Sheet, Blatt **Auszahlungen**: eine Zeile mit Spieler-ID `12345`, Summe `100`, Status **Offen**.
+   Bei `art` erscheinen die Spalten aus deiner Liste zur Auswahl. Für den Test nimmst du am besten eine günstige Spalte.
+7. Bis zu 1 Minute nach der Startzeit: „▶️ … hat begonnen!“
+8. `/event teilnehmer event:` *#1 wählen*: Du stehst drin, mit „→ dein Name“.
+9. Im Call bleiben. Etwa 3 Minuten nach dem Start: „🏁 … ist beendet“.
+10. In der Liste ist in deiner Zeile die Spalte **um 1 höher**, und „Auszahlung offen“ ist gestiegen.
 
 ### d) Auszahlungen
-| 11 | `/auszahlung offen` | `12345` – 100 $ |
+| 11 | `/auszahlung meine` | Deine Teilnahmen und dein offener Betrag |
 |---|---|---|
-| 12 | `/auszahlung meine` | deine offene Auszahlung |
-| 13 | `/auszahlung hinzufuegen spieler_id:12345 event:Test summe:50` | Auszahlung #2 eingetragen |
-| 14 | `/auszahlung erledigt spieler_id:12345` | 2 Auszahlungen über 150 $ als ausgezahlt markiert. Im Sheet steht Status **Ausgezahlt** |
+| 12 | `/auszahlung eintragen spieler:` *du* `art:` *Spalte* `anzahl:-1` | Testeintrag wieder rückgängig gemacht |
+| 13 | `/auszahlung offen` | Alle offenen Beträge |
+
+`/auszahlung erledigt` und `/auszahlung sanktion` schreiben in die Spalten „ausgezahlt“ bzw. „Sanktionen“. Das testest du am besten erst mit einer Kopie der Liste.
 
 Wenn das alles klappt, funktioniert der Bot. 🎉
 
@@ -139,6 +142,8 @@ Wenn das alles klappt, funktioniert der Bot. 🎉
 | `An invalid token was provided` | Token in `.env` falsch, z.B. mit Leerzeichen, Anführungszeichen oder alt. Neu kopieren |
 | `Kein Google-Schlüssel gefunden` | JSON-Datei liegt nicht im Hauptordner (bei Termux: `ls` muss sie anzeigen) |
 | `/setup sheet`: „Ich komme nicht an das Sheet ran“ | Sheet nicht mit der Bot-E-Mail als **Bearbeiter** geteilt, oder Google Sheets API nicht aktiviert |
+| „keine Kopfzeile mit Event-Spalten gefunden“ | Link vom falschen Blatt. Oder die Spaltenköpfe enden nicht auf einen Betrag wie `50k` |
+| Jemand wird „nicht in der Liste gefunden“ | Die Person macht `/id setzen` und wählt sich aus. Die Teilnahme wird automatisch nachgetragen |
 | Keine `/`-Befehle zu sehen | Discord-App neu starten. Bot mit Scope `applications.commands` eingeladen? (Schritt 1.4) |
 | „Startzeit liegt in der Vergangenheit“ | Eine spätere Uhrzeit nehmen. Die Zeitzone ist Europe/Berlin |
 | Event startet nicht | 1–2 Min warten (der Bot prüft jede Minute). Kann der Bot den Voice-Kanal **sehen**? |

@@ -1,13 +1,14 @@
 const { SlashCommandBuilder, EmbedBuilder, ChannelType } = require('discord.js');
-const sheets = require('../sheets');
-const { byId, EVENT } = sheets;
 const servers = require('../servers');
-const { denyUnlessAdmin } = require('../permissions');
-const { parseDateTime, formatDate, discordTs, money, minutes, clip } = require('../format');
+const store = require('../eventstore');
 const events = require('../events');
 const tracker = require('../tracker');
 const config = require('../config');
+const { denyUnlessAdmin } = require('../permissions');
+const { currentList, eventChoices, requireEvent } = require('../lookup');
+const { parseDateTime, formatDate, discordTs, money, minutes, clip } = require('../format');
 
+const { EVENT } = events;
 const eventOption = (o) => o.setName('event').setDescription('Welches Event?').setRequired(true).setAutocomplete(true);
 
 // Welche Events in der Autovervollständigung je Unterbefehl erscheinen
@@ -26,12 +27,12 @@ module.exports = {
     .addSubcommand((s) => s
       .setName('ankuendigen')
       .setDescription('Neues Event ankündigen')
-      .addStringOption((o) => o.setName('name').setDescription('Name des Events').setRequired(true).setMaxLength(100))
+      .addStringOption((o) => o.setName('art').setDescription('Event-Spalte aus der Liste (bestimmt den Betrag)').setRequired(true).setAutocomplete(true))
       .addStringOption((o) => o.setName('start').setDescription('z.B. "20.11.2026 20:00", "20.11. 20:00" oder "20:00"').setRequired(true))
-      .addNumberOption((o) => o.setName('summe').setDescription('Auszahlung pro Teilnehmer').setRequired(true).setMinValue(0.01))
       .addChannelOption((o) => o.setName('call').setDescription('Voice-Kanal, in dem die Teilnahme gezählt wird').setRequired(true)
         .addChannelTypes(ChannelType.GuildVoice, ChannelType.GuildStageVoice))
-      .addIntegerOption((o) => o.setName('dauer').setDescription('Dauer in Minuten – danach automatisch beenden & auszahlen').setMinValue(1).setMaxValue(1440))
+      .addStringOption((o) => o.setName('titel').setDescription('Eigener Titel (Standard: Name der Spalte)').setMaxLength(100))
+      .addIntegerOption((o) => o.setName('dauer').setDescription('Dauer in Minuten – danach automatisch beenden & eintragen').setMinValue(1).setMaxValue(1440))
       .addIntegerOption((o) => o.setName('min_minuten').setDescription(`Mindestzeit im Call (Standard: ${config.payout.minPercent} % der Dauer)`).setMinValue(0).setMaxValue(1440))
       .addStringOption((o) => o.setName('beschreibung').setDescription('Infos zum Event').setMaxLength(1000))
       .addRoleOption((o) => o.setName('ping').setDescription('Rolle, die gepingt wird'))
@@ -42,41 +43,46 @@ module.exports = {
       .setDescription('Kommende und laufende Events')
       .addBooleanOption((o) => o.setName('alle').setDescription('Auch beendete/abgebrochene zeigen')))
     .addSubcommand((s) => s.setName('start').setDescription('Event jetzt starten (Call-Erfassung beginnt)').addIntegerOption(eventOption))
-    .addSubcommand((s) => s.setName('ende').setDescription('Event beenden und Auszahlungen eintragen').addIntegerOption(eventOption))
+    .addSubcommand((s) => s.setName('ende').setDescription('Event beenden und Teilnahmen eintragen').addIntegerOption(eventOption))
     .addSubcommand((s) => s.setName('teilnehmer').setDescription('Aktuellen Stand im Call anzeigen').addIntegerOption(eventOption))
-    .addSubcommand((s) => s.setName('abbrechen').setDescription('Event absagen (keine Auszahlungen)').addIntegerOption(eventOption)),
+    .addSubcommand((s) => s.setName('abbrechen').setDescription('Event absagen (nichts wird eingetragen)').addIntegerOption(eventOption)),
 
   async autocomplete(interaction) {
-    const allowed = AUTOCOMPLETE_STATUS[interaction.options.getSubcommand()] ?? Object.values(EVENT);
-    const typed = String(interaction.options.getFocused()).toLowerCase();
-    const tables = await sheets.forGuild(interaction.guildId);
-    const list = (await tables.events.readAll())
-      .filter((e) => allowed.includes(e.Status))
-      .map((e) => ({ name: `#${e.ID} ${e.Name} (${e.Start})`.slice(0, 100), value: Number(e.ID) }))
-      .filter((c) => c.name.toLowerCase().includes(typed));
-    await interaction.respond(list.slice(0, 25));
+    const sub = interaction.options.getSubcommand();
+    const focused = interaction.options.getFocused(true);
+    if (focused.name === 'art') {
+      const liste = await currentList(interaction.guildId);
+      return interaction.respond(eventChoices(liste, focused.value));
+    }
+    const allowed = AUTOCOMPLETE_STATUS[sub] ?? Object.values(EVENT);
+    const typed = String(focused.value).toLowerCase();
+    const list = store.list(interaction.guildId)
+      .filter((e) => allowed.includes(e.status))
+      .map((e) => ({ name: `#${e.ID} ${events.eventTitle(e)} (${formatDate(e.start)})`.slice(0, 100), value: e.ID }))
+      .filter((c) => c.name.toLowerCase().includes(typed))
+      .slice(-25);
+    await interaction.respond(list);
   },
 
   async execute(interaction) {
     const sub = interaction.options.getSubcommand();
-    const tables = await sheets.forGuild(interaction.guildId);
-    if (sub === 'liste') return liste(interaction, tables);
+    if (sub === 'liste') return liste(interaction);
     if (await denyUnlessAdmin(interaction)) return;
-    if (sub === 'ankuendigen') return ankuendigen(interaction, tables);
+    if (sub === 'ankuendigen') return ankuendigen(interaction);
 
     await interaction.deferReply({ ephemeral: true });
-    const ev = await events.getEvent(interaction.guildId, interaction.options.getInteger('event'));
+    const ev = store.get(interaction.guildId, interaction.options.getInteger('event'));
     if (!ev) return interaction.editReply('Dieses Event gibt es nicht.');
 
     if (sub === 'start') {
-      if (ev.Status !== EVENT.GEPLANT) return interaction.editReply(`Event #${ev.ID} hat den Status „${ev.Status}“.`);
+      if (ev.status !== EVENT.GEPLANT) return interaction.editReply(`Event #${ev.ID} hat den Status „${ev.status}“.`);
       const count = await events.startEvent(interaction.client, ev);
-      return interaction.editReply(`▶️ **${ev.Name}** gestartet – ${count} Person(en) sind schon im Call und werden erfasst.`);
+      return interaction.editReply(`▶️ **${events.eventTitle(ev)}** gestartet – ${count} Person(en) sind schon im Call und werden erfasst.`);
     }
 
     if (sub === 'ende') {
       if (!tracker.get(events.trackKey(ev))) return interaction.editReply(`Event #${ev.ID} läuft gerade nicht.`);
-      const { embed } = await events.endEvent(interaction.client, ev, interaction.user.username);
+      const { embed } = await events.endEvent(interaction.client, ev);
       return interaction.editReply({ embeds: [embed], allowedMentions: { parse: [] } });
     }
 
@@ -84,27 +90,31 @@ module.exports = {
       const snap = tracker.snapshot(events.trackKey(ev));
       if (!snap) return interaction.editReply(`Event #${ev.ID} läuft gerade nicht.`);
       const minMs = events.minAttendanceMs(ev, snap.durationMs);
+      const liste = await currentList(interaction.guildId);
       const lines = snap.users
         .sort((a, b) => b.ms - a.ms)
-        .map((u) => `${u.ms >= minMs ? '✅' : '⏳'} ${u.present ? '🔊' : '🔇'} <@${u.id}> – ${minutes(u.ms)} Min`);
+        .map((u) => {
+          const p = events.resolvePlayer(liste, interaction.guildId, u);
+          return `${u.ms >= minMs ? '✅' : '⏳'} ${u.present ? '🔊' : '🔇'} <@${u.id}> ${p ? `→ ${p.label}` : '→ ⚠️ nicht in der Liste'} – ${minutes(u.ms)} Min`;
+        });
       const embed = new EmbedBuilder()
         .setColor(0x5865f2)
-        .setTitle(`👥 ${ev.Name} – Teilnehmer im Call`)
+        .setTitle(`👥 ${events.eventTitle(ev)} – Teilnehmer im Call`)
         .setDescription(lines.length ? clip(lines) : 'Noch niemand im Call.')
-        .setFooter({ text: `Läuft seit ${minutes(snap.durationMs)} Min · Mindestzeit aktuell ${minutes(minMs)} Min · ✅ = bekommt Auszahlung, 🔊 = gerade im Call` });
+        .setFooter({ text: `Läuft seit ${minutes(snap.durationMs)} Min · Mindestzeit aktuell ${minutes(minMs)} Min · ✅ = wird eingetragen, 🔊 = gerade im Call` });
       return interaction.editReply({ embeds: [embed], allowedMentions: { parse: [] } });
     }
 
     if (sub === 'abbrechen') {
-      if (![EVENT.GEPLANT, EVENT.LAEUFT].includes(ev.Status)) return interaction.editReply(`Event #${ev.ID} ist schon ${ev.Status.toLowerCase()}.`);
+      if (![EVENT.GEPLANT, EVENT.LAEUFT].includes(ev.status)) return interaction.editReply(`Event #${ev.ID} ist schon ${ev.status.toLowerCase()}.`);
       await events.cancelEvent(ev);
-      await events.postTo(interaction.client, ev['Post-Kanal-ID'], { content: `❌ **${ev.Name}** wurde abgesagt.` });
+      await events.postTo(interaction.client, ev.postId, { content: `❌ **${events.eventTitle(ev)}** wurde abgesagt.` });
       return interaction.editReply(`❌ Event #${ev.ID} abgebrochen.`);
     }
   },
 };
 
-async function ankuendigen(interaction, tables) {
+async function ankuendigen(interaction) {
   const o = interaction.options;
   const startMs = parseDateTime(o.getString('start'));
   if (!startMs) {
@@ -115,6 +125,8 @@ async function ankuendigen(interaction, tables) {
   }
   await interaction.deferReply({ ephemeral: true });
 
+  const liste = await currentList(interaction.guildId);
+  const art = requireEvent(liste, o.getString('art'));
   const call = o.getChannel('call');
   let postChannel = o.getChannel('post_kanal');
   const { announceChannelId } = servers.get(interaction.guildId);
@@ -123,41 +135,38 @@ async function ankuendigen(interaction, tables) {
   }
   postChannel ??= interaction.channel ?? (await interaction.client.channels.fetch(interaction.channelId));
 
-  const name = o.getString('name');
-  const summe = o.getNumber('summe');
   const dauer = o.getInteger('dauer');
   const minMin = o.getInteger('min_minuten');
   const beschreibung = o.getString('beschreibung') ?? '';
   const ping = o.getRole('ping');
 
-  const ev = await tables.events.add({
-    Name: name,
-    Start: formatDate(startMs),
-    'Start (Unix)': Math.floor(startMs / 1000),
-    'Dauer (Min)': dauer ?? '',
-    'Min. Minuten': minMin ?? '',
-    Summe: summe,
-    'Voice-Kanal-ID': call.id,
-    'Voice-Kanal': call.name,
-    'Post-Kanal-ID': postChannel.id,
-    Status: EVENT.GEPLANT,
-    'Erstellt von': interaction.user.username,
-    Beschreibung: beschreibung,
+  const ev = store.create(interaction.guildId, {
+    art: art.name,
+    betrag: art.amount,
+    titel: o.getString('titel') || '',
+    start: startMs,
+    dauer: dauer ?? null,
+    minMinuten: minMin ?? null,
+    voiceId: call.id,
+    postId: postChannel.id,
+    status: EVENT.GEPLANT,
+    createdBy: interaction.user.username,
+    beschreibung,
   });
 
   const mindest = minMin != null ? `${minMin} Min` : `${config.payout.minPercent} % der Eventdauer`;
   const embed = new EmbedBuilder()
     .setColor(0xeb459e)
-    .setTitle(`📣 ${name}`)
+    .setTitle(`📣 ${events.eventTitle(ev)}`)
     .setDescription(beschreibung || null)
     .addFields(
       { name: '🕒 Start', value: `${discordTs(startMs, 'F')}\n(${discordTs(startMs, 'R')})`, inline: true },
       { name: '⏱️ Dauer', value: dauer ? `${dauer} Min` : 'offen', inline: true },
       { name: '🔊 Call', value: `${call}`, inline: true },
-      { name: '💰 Auszahlung', value: `${money(summe)} pro Teilnehmer`, inline: true },
+      { name: '💰 Auszahlung', value: `${money(art.amount)} pro Teilnehmer`, inline: true },
       { name: '✅ Bedingung', value: `mind. ${mindest} im Call`, inline: true },
     )
-    .setFooter({ text: `Event #${ev.ID} · Spieler-ID mit /id setzen hinterlegen, sonst kann nicht ausgezahlt werden` });
+    .setFooter({ text: `Event #${ev.ID} · zählt als „${art.name}“ · nicht in der Liste? → /id setzen` });
 
   const isEveryone = ping && ping.id === interaction.guildId;
   const msg = await postChannel.send({
@@ -168,29 +177,29 @@ async function ankuendigen(interaction, tables) {
     console.error('Ankündigung fehlgeschlagen:', err.message);
     return null;
   });
-  if (msg) await tables.events.update(byId(ev.ID), { 'Nachricht-ID': msg.id });
+  if (msg) store.update(interaction.guildId, ev.ID, { messageId: msg.id });
 
   await interaction.editReply(
     msg
       ? `✅ Event #${ev.ID} angekündigt in ${postChannel}. Die Call-Erfassung startet automatisch ${discordTs(startMs, 'R')}` +
-        (dauer ? ` und endet nach ${dauer} Min mit automatischer Auszahlung.` : ' – beenden mit `/event ende`.')
+        (dauer ? ` und endet nach ${dauer} Min – dann wird „${art.name}“ bei allen Teilnehmern +1 gezählt.` : ' – beenden mit `/event ende`.')
       : `⚠️ Event #${ev.ID} gespeichert, aber ich konnte nicht in ${postChannel} posten (fehlen mir Rechte?).`,
   );
 }
 
-async function liste(interaction, tables) {
+async function liste(interaction) {
   await interaction.deferReply();
   const alle = interaction.options.getBoolean('alle') ?? false;
-  const list = (await tables.events.readAll())
-    .filter((e) => alle || e.Status === EVENT.GEPLANT || e.Status === EVENT.LAEUFT)
-    .sort((a, b) => Number(a['Start (Unix)']) - Number(b['Start (Unix)']));
+  const list = store.list(interaction.guildId)
+    .filter((e) => alle || e.status === EVENT.GEPLANT || e.status === EVENT.LAEUFT)
+    .sort((a, b) => a.start - b.start);
   const icon = { [EVENT.GEPLANT]: '🗓️', [EVENT.LAEUFT]: '🟢', [EVENT.BEENDET]: '🏁', [EVENT.ABGEBROCHEN]: '❌' };
   const lines = list.map((e) =>
-    `${icon[e.Status] ?? ''} **#${e.ID} ${e.Name}** – ${discordTs(Number(e['Start (Unix)']) * 1000, 'f')} – ` +
-    `<#${e['Voice-Kanal-ID']}> – ${money(e.Summe)}${e.Status === EVENT.BEENDET ? ` · ${e.Teilnehmer} Teilnehmer` : ''}`);
+    `${icon[e.status] ?? ''} **#${e.ID} ${events.eventTitle(e)}** – ${discordTs(e.start, 'f')} – <#${e.voiceId}> – ${money(e.betrag)}` +
+    `${e.status === EVENT.BEENDET ? ` · ${e.teilnehmer ?? 0} Teilnehmer` : ''}`);
   const embed = new EmbedBuilder()
     .setColor(0xeb459e)
     .setTitle(alle ? '📅 Alle Events' : '📅 Kommende Events')
-    .setDescription(lines.length ? clip(lines) : 'Keine Events geplant.');
+    .setDescription(lines.length ? clip(lines.slice(-40)) : 'Keine Events geplant.');
   return interaction.editReply({ embeds: [embed] });
 }

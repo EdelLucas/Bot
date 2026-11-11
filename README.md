@@ -1,74 +1,86 @@
 # Discord Auszahlungs-Bot
 
-Discord-Bot für Events und Auszahlungen. Alles landet in einem **Google Sheet**.
+Discord-Bot für Events und Auszahlungen. Er arbeitet direkt mit eurer **bestehenden Auszahlungsliste** in Google Sheets. Er legt keine eigenen Blätter an, sondern zählt in eurer Liste hoch.
 
-**Mehrere Server:** Der Bot kann auf beliebig vielen Discord-Servern gleichzeitig laufen. Jeder Server verbindet mit `/setup sheet` sein **eigenes** Sheet. Events, Auszahlungen und Spieler-IDs bleiben pro Server getrennt.
-
-- **Events ankündigen:** Ankündigung mit Startzeit, Voice-Call und Betrag, optional mit Rollen-Ping
+- **Events ankündigen:** Event-Art aus der Liste wählen (z.B. „Staatliche 25k“), Startzeit, Voice-Call, optional mit Rollen-Ping
 - **Calls prüfen:** Während des Events erfasst der Bot, wer wie lange im Voice-Call ist
-- **Automatisch auszahlen:** Wer zum Event-Ende lange genug im Call war, wird mit Spieler-ID und Summe in die Auszahlungsliste eingetragen
-- **Manuelle Auszahlungen:** Spieler-ID, Event und Summe direkt eintragen
+- **Automatisch eintragen:** Wer lange genug im Call war, bekommt in der Spalte des Events **+1**
+- **Auszahlen und Sanktionen:** Beträge landen in den Spalten „ausgezahlt“ und „Sanktionen“. „Auszahlung offen“ wird nur gelesen
+- **Mehrere Server:** Jeder Discord-Server verbindet mit `/setup sheet` seine eigene Liste
+
+## So muss die Liste aussehen
+
+| A | B | C | … | | | |
+|---|---|---|---|---|---|---|
+| *(Titel, z.B. MAUSPARKPLATZ)* | **40er 50k** | **Staatliche 25k** | … | **Auszahlung offen** | **Sanktionen** | **ausgezahlt** |
+| Aiden Akh \| 4823 | | 4 | … | $340.000 | | 50000 |
+| Cristina Diaz I 4358 | 1 | 10 | … | $140.000 | | 1340000 |
+
+- **Kopfzeile:** Jede Spalte, deren Name mit einem Betrag endet (`50k`, `100k`, `250k`, `1,5m`, `5000`), ist eine **Event-Art**. Der Betrag gilt pro Teilnahme.
+- **Spalte A:** Spieler als `Name | ID` (auch `Name I ID` oder `Name / ID`).
+- **Zellen:** Wie oft der Spieler bei dem Event dabei war.
+- **„Auszahlung offen“:** wird nur gelesen. Am besten eine Formel wie `=B2*50000+C2*40000+…-S2-T2`. Fehlt die Spalte, rechnet der Bot selbst (Anzahl × Betrag − Sanktionen − ausgezahlt).
+- **„Sanktionen“ / „ausgezahlt“:** Hier addiert der Bot Beträge bei `/auszahlung sanktion` bzw. `/auszahlung erledigt`.
+- Weitere Spalten (Notizen o.ä.) stören nicht. Spalten ohne Betrag im Namen ignoriert der Bot.
 
 ## Ablauf
 
 ```
-/event ankuendigen  ──►  Bot postet Ankündigung (+ Ping)
+/event ankuendigen art:"Staatliche 25k"  ──►  Bot postet Ankündigung (+ Ping)
         │
    Startzeit erreicht  ──►  Bot startet die Call-Erfassung automatisch (oder /event start)
-        │                    und zählt Minuten pro Person im Voice-Kanal
         │
    Dauer abgelaufen    ──►  automatisch Ende (oder /event ende)
         │
         ▼
-Alle mit genug Minuten im Call  ──►  Zeile im Blatt "Auszahlungen" (Status "Offen")
-Ohne hinterlegte Spieler-ID     ──►  Status "ID fehlt", wird nachgetragen sobald /id setzen
+Genug Minuten im Call   ──►  Spalte "Staatliche 25k" in der Zeile des Spielers +1
+Nicht in der Liste      ──►  Hinweis im Kanal, wird nachgetragen sobald /id setzen
 ```
+
+**Wie erkennt der Bot, wer wer ist?** In dieser Reihenfolge:
+1. Verknüpfung per `/id setzen`, wo man sich selbst aus der Liste auswählt
+2. Der Discord-Anzeigename ist genau der Name in der Liste, z.B. „Aiden Akh“
+3. Die Spieler-ID steht im Discord-Namen, z.B. „Aiden | 4823“
 
 ## Commands
 
 ### Einrichtung pro Server („Server verwalten“)
 | Command | Beschreibung |
 |---|---|
-| `/setup sheet link` | Google Sheet dieses Servers verbinden (vorher mit der Bot-E-Mail teilen) |
+| `/setup sheet link [blatt]` | Liste verbinden. Am besten den Link direkt vom richtigen Blatt kopieren, sonst sucht der Bot das passende Blatt |
+| `/setup blatt name` | Anderes Blatt im selben Sheet verwenden |
 | `/setup kanal kanal` | Standard-Kanal für Event-Ankündigungen |
 | `/setup adminrolle rolle` | Rolle, die Events und Auszahlungen verwalten darf |
-| `/setup info` | Einstellungen und Bot-E-Mail anzeigen |
+| `/setup info` | Zeigt Einstellungen, Bot-E-Mail und was der Bot in der Liste erkannt hat |
 
 ### Für alle
 | Command | Beschreibung |
 |---|---|
-| `/id setzen spieler_id` | Eigene Spieler-ID hinterlegen (nötig für Auszahlungen) |
-| `/id anzeigen [benutzer]` | Hinterlegte ID anzeigen |
-| `/auszahlung meine` | Eigene offene Auszahlungen |
+| `/id setzen spieler` | Sich selbst in der Liste auswählen (Vorschläge beim Tippen) |
+| `/id anzeigen [benutzer]` | Mit welchem Eintrag ist jemand verknüpft? |
+| `/auszahlung meine` | Eigene Teilnahmen und offener Betrag |
 | `/event liste [alle]` | Kommende/laufende Events |
-| `/sheet` | Link zum Google Sheet |
+| `/sheet` | Link zur Liste |
 
-### Für Admins („Server verwalten“ oder die Admin-Rolle aus `/setup adminrolle`)
+### Für Admins („Server verwalten“ oder die Admin-Rolle)
 | Command | Beschreibung |
 |---|---|
-| `/event ankuendigen name start summe call [dauer] [min_minuten] [beschreibung] [ping] [post_kanal]` | Event ankündigen. `start` z.B. `20.11.2026 20:00`, `20.11. 20:00` oder `20:00` |
+| `/event ankuendigen art start call [titel] [dauer] [min_minuten] [beschreibung] [ping] [post_kanal]` | Event ankündigen. `start` z.B. `20.11.2026 20:00`, `20.11. 20:00` oder `20:00` |
 | `/event start event` | Event sofort starten (sonst automatisch zur Startzeit) |
-| `/event teilnehmer event` | Live-Stand: wer ist wie lange im Call, wer bekommt eine Auszahlung |
-| `/event ende event` | Event beenden und Auszahlungen eintragen (automatisch, wenn `dauer` gesetzt ist) |
-| `/event abbrechen event` | Event absagen, keine Auszahlungen |
-| `/auszahlung hinzufuegen spieler_id event summe` | Auszahlung manuell eintragen |
-| `/auszahlung liste [status] [event] [spieler_id]` | Auszahlungen anzeigen (Standard: offene) |
-| `/auszahlung offen` | Offene Beträge pro Spieler-ID zusammengerechnet |
-| `/auszahlung erledigt [eintrag] [spieler_id] [event]` | Als ausgezahlt markieren, z.B. alle offenen einer Spieler-ID |
-| `/auszahlung loeschen eintrag` | Eintrag löschen |
-| `/id setzen spieler_id benutzer` | ID für jemand anderen setzen |
+| `/event teilnehmer event` | Live-Stand: wer ist wie lange im Call, wer wird eingetragen, wer fehlt in der Liste |
+| `/event ende event` | Event beenden und eintragen (automatisch, wenn `dauer` gesetzt ist) |
+| `/event abbrechen event` | Event absagen, nichts wird eingetragen |
+| `/auszahlung offen` | Alle offenen Beträge |
+| `/auszahlung spieler spieler` | Übersicht eines Spielers |
+| `/auszahlung eintragen spieler art [anzahl]` | Teilnahme von Hand eintragen (negativ = korrigieren) |
+| `/auszahlung erledigt spieler [betrag]` | Ausgezahlt: Betrag (Standard: alles Offene) in „ausgezahlt“ addieren |
+| `/auszahlung sanktion spieler betrag` | Betrag in „Sanktionen“ addieren |
+| `/id setzen spieler benutzer` | Jemand anderen verknüpfen |
+| `/id hinzufuegen name spieler_id [benutzer]` | Neuen Spieler unten in Spalte A eintragen |
 
-**Wer bekommt eine Auszahlung?** Jeder, der mindestens `min_minuten` im Call war. Ohne Angabe gelten `MIN_ANWESENHEIT_PROZENT` (Standard 50 %) der tatsächlichen Eventdauer. Rein- und Rausgehen wird zusammengezählt. Bots werden ignoriert.
+**Wer wird eingetragen?** Jeder, der mindestens `min_minuten` im Call war. Ohne Angabe gelten `MIN_ANWESENHEIT_PROZENT` (Standard 50 %) der tatsächlichen Eventdauer. Rein- und Rausgehen wird zusammengezählt. Bots werden ignoriert.
 
-## Aufbau des Sheets
-
-Die Tabellenblätter legt der Bot bei `/setup sheet` selbst an:
-
-- **Auszahlungen:** ID · Datum · Event-ID · Event · Spieler-ID · Discord-Name · Discord-ID · Summe · Anwesenheit (Min) · Status · Quelle · Eingetragen von · Ausgezahlt am
-- **Events:** ID · Name · Start · Dauer · Summe · Voice-Kanal · Status · Teilnehmer · …
-- **Spieler:** Discord-ID · Discord-Name · Spieler-ID (Zuordnung Discord ↔ Spieler-ID)
-
-Die Spalte *Summe* enthält echte Zahlen, damit man im Sheet direkt mit `=SUMME(...)` rechnen kann.
+**Was der Bot lokal speichert** (Ordner `data/`, beim Hoster **nicht löschen**): Einstellungen und Verknüpfungen pro Server (`servers.json`), Events (`events.json`) und laufende Call-Erfassung (`tracking.json`).
 
 ## Einrichtung
 
@@ -89,13 +101,12 @@ Der Bot muss die Voice-Kanäle **sehen** können, sonst kann er die Teilnehmer n
 
 Die E-Mail-Adresse des Dienstkontos (`…@….iam.gserviceaccount.com`) ist die **Bot-E-Mail**. Mit ihr teilt jeder Server sein Sheet. Der Bot zeigt sie beim Start in der Konsole und in Discord mit `/setup info` an.
 
-### 3. Pro Server: Sheet verbinden
+### 3. Pro Server: Liste verbinden
 1. Bot auf den Server einladen (Link aus Schritt 1.4)
-2. Ein Google Sheet erstellen → **Teilen** → Bot-E-Mail als **Bearbeiter** hinzufügen
-3. In Discord: `/setup sheet link:<Link zum Sheet>` → der Bot legt die Tabellenblätter an
-4. Optional: `/setup kanal` und `/setup adminrolle`
-
-Die Einstellungen speichert der Bot in `data/servers.json`. Diesen Ordner beim Hoster nicht löschen.
+2. Das Google Sheet mit der Liste → **Teilen** → Bot-E-Mail als **Bearbeiter** hinzufügen
+3. Im Sheet das Blatt mit der Liste öffnen, den Link aus der Adresszeile kopieren
+4. In Discord: `/setup sheet link:<Link>`. Der Bot zeigt an, welche Spieler und Event-Spalten er erkannt hat
+5. Optional: `/setup kanal` und `/setup adminrolle`
 
 ### 4. Starten
 ```bash
@@ -116,11 +127,13 @@ src/
 ├── index.js            # Bot-Start, Events von Discord verteilen
 ├── deploy-commands.js  # Slash-Commands bei Discord registrieren
 ├── config.js           # .env lesen
-├── servers.js          # Einstellungen pro Discord-Server (/setup)
+├── servers.js          # Einstellungen + Verknüpfungen pro Discord-Server
+├── eventstore.js       # Events (lokal gespeichert)
+├── lookup.js           # Auswahllisten für die Commands
 ├── google.js           # schlanker Google-Sheets-Client
-├── sheets.js           # Google-Sheets-Zugriff (Tabellenblätter Auszahlungen/Events/Spieler)
+├── sheets.js           # Liste lesen und hochzählen
 ├── tracker.js          # wer ist wie lange im Voice-Call
-├── events.js           # Event starten/beenden, Auszahlungen erzeugen, Zeitplaner
+├── events.js           # Event starten/beenden, Teilnahmen eintragen, Zeitplaner
 ├── format.js           # Datum/Uhrzeit, Beträge
 ├── permissions.js      # Admin-Prüfung
 └── commands/           # /setup, /event, /auszahlung, /id, /sheet

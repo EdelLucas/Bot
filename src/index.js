@@ -20,13 +20,12 @@ client.once(Events.ClientReady, async (c) => {
       .then(({ count, scope }) => console.log(`✅ ${count} Slash-Commands ${scope} registriert`))
       .catch((err) => console.error('Slash-Commands konnten nicht registriert werden:', err.message));
   }
-  console.log(`🌐 Auf ${c.guilds.cache.size} Server(n), davon ${servers.configuredGuildIds().length} mit Sheet eingerichtet`);
-
-  // Sheets der eingerichteten Server schon jetzt verbinden (spart Zeit beim ersten Befehl)
+  console.log(`🌐 Auf ${c.guilds.cache.size} Server(n), davon ${servers.configuredGuildIds().length} mit Liste eingerichtet`);
   for (const guildId of servers.configuredGuildIds()) {
-    sheets.forGuild(guildId)
-      .then(() => console.log(`📊 Sheet für ${c.guilds.cache.get(guildId)?.name ?? guildId} verbunden`))
-      .catch((err) => console.error(`⚠️ Sheet für Server ${guildId} nicht erreichbar:`, err.message));
+    const { sheetId, tab } = servers.get(guildId);
+    sheets.load(sheetId, tab)
+      .then((l) => console.log(`📊 ${c.guilds.cache.get(guildId)?.name ?? guildId}: Blatt „${tab}“ – ${l.players.length} Spieler, ${l.events.length} Event-Spalten`))
+      .catch((err) => console.error(`⚠️ Liste für Server ${guildId} nicht lesbar:`, err.message));
   }
   await tracker.resync(c);
   eventFlow.startScheduler(c);
@@ -39,10 +38,10 @@ client.on(Events.GuildCreate, async (guild) => {
   if (!channel?.permissionsFor(guild.members.me)?.has('SendMessages')) return;
   const email = sheets.serviceAccountEmail();
   await channel.send(
-    '👋 Hi! Ich verwalte Events und Auszahlungen in einem Google Sheet.\n' +
+    '👋 Hi! Ich kündige Events an, prüfe den Call und zähle die Teilnahmen in eurer Auszahlungsliste (Google Sheet) hoch.\n' +
     '**Einrichten (für Admins):**\n' +
-    '1. Ein Google Sheet erstellen und ' + (email ? `mit \`${email}\`` : 'mit der Bot-E-Mail') + ' als **Bearbeiter** teilen\n' +
-    '2. `/setup sheet link:<Link zum Sheet>`\n' +
+    '1. Euer Google Sheet ' + (email ? `mit \`${email}\`` : 'mit der Bot-E-Mail') + ' als **Bearbeiter** teilen\n' +
+    '2. `/setup sheet link:<Link zum Blatt mit der Liste>`\n' +
     '3. Optional: `/setup kanal` (Ankündigungen) und `/setup adminrolle`',
   ).catch(() => {});
 });
