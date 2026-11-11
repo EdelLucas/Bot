@@ -4,6 +4,7 @@ const servers = require('../servers');
 const events = require('../events');
 const { isAdmin, denyUnlessAdmin } = require('../permissions');
 const { currentList, playerChoices, requirePlayer } = require('../lookup');
+const { money } = require('../format');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -24,7 +25,12 @@ module.exports = {
       .setDescription('Admins: neuen Spieler unten in die Liste eintragen')
       .addStringOption((o) => o.setName('name').setDescription('Name, z.B. Max Muster').setRequired(true).setMaxLength(80))
       .addStringOption((o) => o.setName('spieler_id').setDescription('Spieler-ID (Zahl)').setRequired(true).setMaxLength(20))
-      .addUserOption((o) => o.setName('benutzer').setDescription('Optional: gleich mit diesem Discord-Konto verknüpfen'))),
+      .addUserOption((o) => o.setName('benutzer').setDescription('Optional: gleich mit diesem Discord-Konto verknüpfen')))
+    .addSubcommand((s) => s
+      .setName('entfernen')
+      .setDescription('Admins: Spieler aus der Liste löschen (ganze Zeile)')
+      .addStringOption((o) => o.setName('spieler').setDescription('Name oder ID tippen und auswählen').setRequired(true).setAutocomplete(true))
+      .addBooleanOption((o) => o.setName('bestaetigen').setDescription('Nötig, wenn der Spieler noch Geld offen hat'))),
 
   async autocomplete(interaction) {
     const liste = await currentList(interaction.guildId);
@@ -61,6 +67,26 @@ module.exports = {
       const linkUser = interaction.options.getUser('benutzer');
       if (linkUser) servers.setPlayerId(guildId, linkUser.id, spielerId);
       return interaction.editReply(`✅ **${name} | ${spielerId}** in Zeile ${added.row} eingetragen${linkUser ? ` und mit ${linkUser} verknüpft` : ''}.`);
+    }
+
+    if (sub === 'entfernen') {
+      if (await denyUnlessAdmin(interaction)) return;
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+      const liste = await currentList(guildId);
+      const player = requirePlayer(liste, interaction.options.getString('spieler'));
+      const { offen } = liste.stats(player);
+      if (offen > 0 && !interaction.options.getBoolean('bestaetigen')) {
+        return interaction.editReply(
+          `⚠️ **${player.label}** hat noch **${money(offen)}** offen. Erst auszahlen (\`/auszahlung erledigt\`) ` +
+          'oder zum Löschen trotzdem nochmal mit `bestaetigen:True` ausführen.');
+      }
+      const { sheetId, tab } = servers.sheetOf(guildId);
+      await sheets.removePlayer(sheetId, tab, player.id);
+      const unlinked = servers.unlinkPlayer(guildId, player.id);
+      return interaction.editReply(
+        `🗑️ **${player.label}** wurde aus der Liste entfernt (Zeile ${player.row}).` +
+        (offen > 0 ? ` Offener Betrag ${money(offen)} wurde mit gelöscht.` : '') +
+        (unlinked ? ` ${unlinked} Discord-Verknüpfung(en) aufgehoben.` : ''));
     }
 
     // setzen

@@ -1,10 +1,12 @@
-const { SlashCommandBuilder, EmbedBuilder, MessageFlags } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder, ChannelType, MessageFlags } = require('discord.js');
 const sheets = require('../sheets');
 const servers = require('../servers');
 const events = require('../events');
 const { denyUnlessAdmin } = require('../permissions');
 const { currentList, playerChoices, eventChoices, requirePlayer, requireEvent } = require('../lookup');
-const { money, clip } = require('../format');
+const { money, clip, parseDays, formatDays, parseTime, formatTime } = require('../format');
+const store = require('../eventstore');
+const payoutList = require('../payoutlist');
 
 const spielerOption = (o) => o.setName('spieler').setDescription('Name oder ID tippen und auswählen').setRequired(true).setAutocomplete(true);
 
@@ -31,6 +33,19 @@ module.exports = {
     .setDMPermission(false)
     .addSubcommand((s) => s.setName('meine').setDescription('Deine Teilnahmen und dein offener Betrag'))
     .addSubcommand((s) => s.setName('offen').setDescription('Admins: alle offenen Beträge'))
+    .addSubcommand((s) => s
+      .setName('liste')
+      .setDescription('Admins: Auszahlungsliste posten – mit Auswahlmenü zum Abhaken')
+      .addChannelOption((o) => o.setName('kanal').setDescription('Wohin? (Standard: hier)')
+        .addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement)))
+    .addSubcommand((s) => s
+      .setName('automatisch')
+      .setDescription('Admins: Auszahlungsliste regelmäßig automatisch posten')
+      .addChannelOption((o) => o.setName('kanal').setDescription('Kanal').setRequired(true)
+        .addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement))
+      .addStringOption((o) => o.setName('tage').setDescription('z.B. "So", "Mo,Do", "täglich"').setRequired(true))
+      .addStringOption((o) => o.setName('zeit').setDescription('z.B. "18:00"').setRequired(true)))
+    .addSubcommand((s) => s.setName('automatisch_aus').setDescription('Admins: automatische Auszahlungsliste abschalten'))
     .addSubcommand((s) => s.setName('spieler').setDescription('Admins: Übersicht eines Spielers').addStringOption(spielerOption))
     .addSubcommand((s) => s
       .setName('eintragen')
@@ -69,6 +84,32 @@ module.exports = {
 
     if (await denyUnlessAdmin(interaction)) return;
     const { sheetId, tab } = servers.sheetOf(guildId);
+
+    if (sub === 'liste') {
+      const kanal = interaction.options.getChannel('kanal');
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+      const msg = await payoutList.post(interaction.client, guildId, kanal?.id ?? interaction.channelId);
+      return interaction.editReply(`✅ Auszahlungsliste gepostet: ${msg.url}`);
+    }
+
+    if (sub === 'automatisch') {
+      const tage = parseDays(interaction.options.getString('tage'));
+      const time = parseTime(interaction.options.getString('zeit'));
+      if (!tage || !time) {
+        return interaction.reply({ content: '⛔ Tage oder Uhrzeit nicht erkannt. Beispiel: `tage:So zeit:18:00`', flags: MessageFlags.Ephemeral });
+      }
+      const kanal = interaction.options.getChannel('kanal');
+      store.setPayoutPlan(guildId, { channelId: kanal.id, tage, zeit: formatTime(time) });
+      return interaction.reply({
+        content: `✅ Die Auszahlungsliste wird ab jetzt **${formatDays(tage)} um ${formatTime(time)}** in ${kanal} gepostet.`,
+        flags: MessageFlags.Ephemeral,
+      });
+    }
+
+    if (sub === 'automatisch_aus') {
+      store.setPayoutPlan(guildId, null);
+      return interaction.reply({ content: '✅ Automatische Auszahlungsliste abgeschaltet.', flags: MessageFlags.Ephemeral });
+    }
 
     if (sub === 'offen') {
       await interaction.deferReply();

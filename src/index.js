@@ -4,6 +4,7 @@ const sheets = require('./sheets');
 const servers = require('./servers');
 const tracker = require('./tracker');
 const eventFlow = require('./events');
+const payoutList = require('./payoutlist');
 const commandList = require('./commands');
 const { registerCommands } = require('./register-commands');
 
@@ -55,6 +56,14 @@ client.on(Events.VoiceStateUpdate, (oldState, newState) => {
 });
 
 client.on(Events.InteractionCreate, async (interaction) => {
+  if ((interaction.isStringSelectMenu() || interaction.isButton()) && payoutList.isPayoutComponent(interaction)) {
+    await payoutList.handleComponent(interaction).catch(async (err) => {
+      console.error('Auszahlungsliste:', err);
+      const msg = { content: `❌ ${err.message}`, flags: MessageFlags.Ephemeral };
+      await (interaction.deferred || interaction.replied ? interaction.followUp(msg) : interaction.reply(msg)).catch(() => {});
+    });
+    return;
+  }
   const command = commands.get(interaction.commandName);
   if (!command) return;
 

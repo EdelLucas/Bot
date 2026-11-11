@@ -231,6 +231,24 @@ function appendPlayer(spreadsheetId, tab, name, id) {
   });
 }
 
+/** Löscht die Zeile eines Spielers aus der Liste (die Zeilen darunter rücken nach oben). */
+function removePlayer(spreadsheetId, tab, playerId) {
+  return serialized(async () => {
+    const liste = await load(spreadsheetId, tab);
+    const p = liste.byId(playerId);
+    if (!p) throw new Error(`Spieler-ID ${playerId} steht nicht in der Liste.`);
+    const sheet = (await listTabs(spreadsheetId)).find((t) => t.title === tab);
+    if (!sheet) throw new Error(`Das Blatt "${tab}" gibt es nicht mehr.`);
+    await client().spreadsheets.batchUpdate({
+      spreadsheetId,
+      requestBody: {
+        requests: [{ deleteDimension: { range: { sheetId: sheet.sheetId, dimension: 'ROWS', startIndex: p.row - 1, endIndex: p.row } } }],
+      },
+    });
+    return { ...p, stats: liste.stats(p) };
+  });
+}
+
 /** Liest die Sheet-ID (und ggf. das Blatt per gid) aus einem Link. */
 function parseSheetLink(input) {
   const s = String(input).trim();
@@ -250,6 +268,6 @@ function serviceAccountEmail() {
 }
 
 module.exports = {
-  load, listTabs, findTab, addEventCounts, addAmount, appendPlayer,
+  load, listTabs, findTab, addEventCounts, addAmount, appendPlayer, removePlayer,
   parseSheetLink, parseAmount, parsePlayer, num, serviceAccountEmail, colLetter,
 };

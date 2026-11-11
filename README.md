@@ -6,6 +6,8 @@ Discord-Bot für Events und Auszahlungen. Er arbeitet direkt mit eurer **bestehe
 - **Calls prüfen:** Während des Events erfasst der Bot, wer wie lange im Voice-Call ist
 - **Automatisch eintragen:** Wer lange genug im Call war, bekommt in der Spalte des Events **+1**
 - **Auszahlen und Sanktionen:** Beträge landen in den Spalten „ausgezahlt“ und „Sanktionen“. „Auszahlung offen“ wird nur gelesen
+- **Regelmäßige Events:** z.B. Mo–Fr 20:00 „Staatliche 25k“. Wird automatisch angekündigt, gestartet und eingetragen
+- **Auszahlungsliste:** Der Bot liest die Liste aus und postet alle mit offenem Betrag, auf Wunsch automatisch. Admins haken per Auswahlmenü ab, dann wird „ausgezahlt“ eingetragen
 - **Mehrere Server:** Jeder Discord-Server verbindet mit `/setup sheet` seine eigene Liste
 
 ## So muss die Liste aussehen
@@ -70,17 +72,24 @@ Nicht in der Liste      ──►  Hinweis im Kanal, wird nachgetragen sobald /i
 | `/event teilnehmer event` | Live-Stand: wer ist wie lange im Call, wer wird eingetragen, wer fehlt in der Liste |
 | `/event ende event` | Event beenden und eintragen (automatisch, wenn `dauer` gesetzt ist) |
 | `/event abbrechen event` | Event absagen, nichts wird eingetragen |
-| `/auszahlung offen` | Alle offenen Beträge |
+| `/event serie anlegen art tage zeit call [dauer] [vorlauf] [titel] [min_minuten] [beschreibung] [ping] [post_kanal]` | Regelmäßiges Event, z.B. `tage:Mo-Fr zeit:20:00 dauer:30`. Ankündigung `vorlauf` Minuten vorher (Standard 60) |
+| `/event serie liste` | Alle regelmäßigen Events |
+| `/event serie loeschen serie` | Regelmäßiges Event löschen |
+| `/auszahlung liste [kanal]` | Liste auslesen und Auszahlungsliste posten: alle mit offenem Betrag, darunter ein **Auswahlmenü zum Abhaken** (trägt den Betrag in „ausgezahlt“ ein) und ein 🔄-Knopf |
+| `/auszahlung automatisch kanal tage zeit` | Auszahlungsliste regelmäßig automatisch posten, z.B. `tage:So zeit:18:00` |
+| `/auszahlung automatisch_aus` | Automatisches Posten abschalten |
+| `/auszahlung offen` | Alle offenen Beträge (nur für dich sichtbar) |
 | `/auszahlung spieler spieler` | Übersicht eines Spielers |
 | `/auszahlung eintragen spieler art [anzahl]` | Teilnahme von Hand eintragen (negativ = korrigieren) |
 | `/auszahlung erledigt spieler [betrag]` | Ausgezahlt: Betrag (Standard: alles Offene) in „ausgezahlt“ addieren |
 | `/auszahlung sanktion spieler betrag` | Betrag in „Sanktionen“ addieren |
 | `/id setzen spieler benutzer` | Jemand anderen verknüpfen |
 | `/id hinzufuegen name spieler_id [benutzer]` | Neuen Spieler unten in Spalte A eintragen |
+| `/id entfernen spieler [bestaetigen]` | Spieler aus der Liste löschen (ganze Zeile). Hat er noch Geld offen, muss man `bestaetigen:True` setzen |
 
 **Wer wird eingetragen?** Jeder, der mindestens `min_minuten` im Call war. Ohne Angabe gelten `MIN_ANWESENHEIT_PROZENT` (Standard 50 %) der tatsächlichen Eventdauer. Rein- und Rausgehen wird zusammengezählt. Bots werden ignoriert.
 
-**Was der Bot lokal speichert** (Ordner `data/`, beim Hoster **nicht löschen**): Einstellungen und Verknüpfungen pro Server (`servers.json`), Events (`events.json`) und laufende Call-Erfassung (`tracking.json`).
+**Was der Bot lokal speichert** (Ordner `data/`, beim Hoster **nicht löschen**): Einstellungen und Verknüpfungen pro Server (`servers.json`), Events, Serien und Auszahlungs-Zeitplan (`events.json`) und laufende Call-Erfassung (`tracking.json`).
 
 ## Einrichtung
 
@@ -128,7 +137,8 @@ src/
 ├── deploy-commands.js  # Slash-Commands bei Discord registrieren
 ├── config.js           # .env lesen
 ├── servers.js          # Einstellungen + Verknüpfungen pro Discord-Server
-├── eventstore.js       # Events (lokal gespeichert)
+├── eventstore.js       # Events, Serien, Auszahlungs-Zeitplan (lokal gespeichert)
+├── payoutlist.js       # Auszahlungsliste mit Abhaken
 ├── lookup.js           # Auswahllisten für die Commands
 ├── google.js           # schlanker Google-Sheets-Client
 ├── sheets.js           # Liste lesen und hochzählen
@@ -138,3 +148,5 @@ src/
 ├── permissions.js      # Admin-Prüfung
 └── commands/           # /setup, /event, /auszahlung, /id, /sheet
 ```
+
+**Tage-Angaben** für Serien und die automatische Auszahlungsliste: `täglich`, `Mo-Fr`, `werktags`, `Wochenende`, `Mi,Sa`, `Fr-Mo`.

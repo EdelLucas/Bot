@@ -7,7 +7,7 @@
   "scripts": {
     "start": "node index.js",
     "deploy": "node src/deploy-commands.js",
-    "check": "node --check src/index.js && node --check src/deploy-commands.js && node --check src/sheets.js && node --check src/config.js && node --check src/format.js && node --check src/tracker.js && node --check src/events.js && node --check src/permissions.js && node --check src/google.js && node --check src/servers.js && node --check src/eventstore.js && node --check src/lookup.js && node --check src/register-commands.js && for f in src/commands/*.js; do node --check \"$f\" || exit 1; done"
+    "check": "node --check src/index.js && node --check src/deploy-commands.js && node --check src/sheets.js && node --check src/config.js && node --check src/format.js && node --check src/tracker.js && node --check src/events.js && node --check src/permissions.js && node --check src/google.js && node --check src/servers.js && node --check src/eventstore.js && node --check src/lookup.js && node --check src/payoutlist.js && node --check src/register-commands.js && for f in src/commands/*.js; do node --check \"$f\" || exit 1; done"
   },
   "engines": {
     "node": ">=18"

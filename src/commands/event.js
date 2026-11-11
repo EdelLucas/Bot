@@ -6,7 +6,9 @@ const tracker = require('../tracker');
 const config = require('../config');
 const { denyUnlessAdmin } = require('../permissions');
 const { currentList, eventChoices, requireEvent } = require('../lookup');
-const { parseDateTime, formatDate, discordTs, money, minutes, clip } = require('../format');
+const {
+  parseDateTime, formatDate, discordTs, money, minutes, clip, parseDays, formatDays, parseTime, formatTime,
+} = require('../format');
 
 const { EVENT } = events;
 const eventOption = (o) => o.setName('event').setDescription('Welches Event?').setRequired(true).setAutocomplete(true);
@@ -45,11 +47,41 @@ module.exports = {
     .addSubcommand((s) => s.setName('start').setDescription('Event jetzt starten (Call-Erfassung beginnt)').addIntegerOption(eventOption))
     .addSubcommand((s) => s.setName('ende').setDescription('Event beenden und Teilnahmen eintragen').addIntegerOption(eventOption))
     .addSubcommand((s) => s.setName('teilnehmer').setDescription('Aktuellen Stand im Call anzeigen').addIntegerOption(eventOption))
-    .addSubcommand((s) => s.setName('abbrechen').setDescription('Event absagen (nichts wird eingetragen)').addIntegerOption(eventOption)),
+    .addSubcommand((s) => s.setName('abbrechen').setDescription('Event absagen (nichts wird eingetragen)').addIntegerOption(eventOption))
+    .addSubcommandGroup((g) => g
+      .setName('serie')
+      .setDescription('Regelmäßige Events, die automatisch angekündigt werden')
+      .addSubcommand((s) => s
+        .setName('anlegen')
+        .setDescription('Regelmäßiges Event anlegen, z.B. Mo–Fr um 20:00')
+        .addStringOption((o) => o.setName('art').setDescription('Event-Spalte aus der Liste').setRequired(true).setAutocomplete(true))
+        .addStringOption((o) => o.setName('tage').setDescription('z.B. "täglich", "Mo-Fr", "Mi,Sa", "Wochenende"').setRequired(true))
+        .addStringOption((o) => o.setName('zeit').setDescription('Startzeit, z.B. "20:00"').setRequired(true))
+        .addChannelOption((o) => o.setName('call').setDescription('Voice-Kanal').setRequired(true)
+          .addChannelTypes(ChannelType.GuildVoice, ChannelType.GuildStageVoice))
+        .addIntegerOption((o) => o.setName('dauer').setDescription('Dauer in Minuten (empfohlen – dann endet es automatisch)').setMinValue(1).setMaxValue(1440))
+        .addIntegerOption((o) => o.setName('vorlauf').setDescription('Wie viele Minuten vorher ankündigen? (Standard 60)').setMinValue(0).setMaxValue(1440))
+        .addStringOption((o) => o.setName('titel').setDescription('Eigener Titel').setMaxLength(100))
+        .addIntegerOption((o) => o.setName('min_minuten').setDescription('Mindestzeit im Call').setMinValue(0).setMaxValue(1440))
+        .addStringOption((o) => o.setName('beschreibung').setDescription('Infos zum Event').setMaxLength(1000))
+        .addRoleOption((o) => o.setName('ping').setDescription('Rolle, die gepingt wird'))
+        .addChannelOption((o) => o.setName('post_kanal').setDescription('Wo angekündigt wird (Standard: Ankündigungskanal)')
+          .addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement)))
+      .addSubcommand((s) => s.setName('liste').setDescription('Alle regelmäßigen Events'))
+      .addSubcommand((s) => s
+        .setName('loeschen')
+        .setDescription('Regelmäßiges Event löschen')
+        .addIntegerOption((o) => o.setName('serie').setDescription('Welche Serie?').setRequired(true).setAutocomplete(true)))),
 
   async autocomplete(interaction) {
     const sub = interaction.options.getSubcommand();
     const focused = interaction.options.getFocused(true);
+    if (focused.name === 'serie') {
+      return interaction.respond(store.listSeries(interaction.guildId)
+        .map((x) => ({ name: `#${x.ID} ${x.titel || x.art} – ${formatDays(x.tage)} ${x.zeit}`.slice(0, 100), value: x.ID }))
+        .filter((c) => c.name.toLowerCase().includes(String(focused.value).toLowerCase()))
+        .slice(0, 25));
+    }
     if (focused.name === 'art') {
       const liste = await currentList(interaction.guildId);
       return interaction.respond(eventChoices(liste, focused.value));
@@ -66,6 +98,7 @@ module.exports = {
 
   async execute(interaction) {
     const sub = interaction.options.getSubcommand();
+    if (interaction.options.getSubcommandGroup() === 'serie') return serie(interaction, sub);
     if (sub === 'liste') return liste(interaction);
     if (await denyUnlessAdmin(interaction)) return;
     if (sub === 'ankuendigen') return ankuendigen(interaction);
@@ -154,30 +187,7 @@ async function ankuendigen(interaction) {
     beschreibung,
   });
 
-  const mindest = minMin != null ? `${minMin} Min` : `${config.payout.minPercent} % der Eventdauer`;
-  const embed = new EmbedBuilder()
-    .setColor(0xeb459e)
-    .setTitle(`📣 ${events.eventTitle(ev)}`)
-    .setDescription(beschreibung || null)
-    .addFields(
-      { name: '🕒 Start', value: `${discordTs(startMs, 'F')}\n(${discordTs(startMs, 'R')})`, inline: true },
-      { name: '⏱️ Dauer', value: dauer ? `${dauer} Min` : 'offen', inline: true },
-      { name: '🔊 Call', value: `${call}`, inline: true },
-      { name: '💰 Auszahlung', value: `${money(art.amount)} pro Teilnehmer`, inline: true },
-      { name: '✅ Bedingung', value: `mind. ${mindest} im Call`, inline: true },
-    )
-    .setFooter({ text: `Event #${ev.ID} · zählt als „${art.name}“ · nicht in der Liste? → /id setzen` });
-
-  const isEveryone = ping && ping.id === interaction.guildId;
-  const msg = await postChannel.send({
-    content: ping ? (isEveryone ? '@everyone' : `${ping}`) : undefined,
-    embeds: [embed],
-    allowedMentions: isEveryone ? { parse: ['everyone'] } : { roles: ping ? [ping.id] : [] },
-  }).catch((err) => {
-    console.error('Ankündigung fehlgeschlagen:', err.message);
-    return null;
-  });
-  if (msg) store.update(interaction.guildId, ev.ID, { messageId: msg.id });
+  const msg = await events.announceEvent(interaction.client, ev, ping?.id ?? null);
 
   await interaction.editReply(
     msg
@@ -202,4 +212,60 @@ async function liste(interaction) {
     .setTitle(alle ? '📅 Alle Events' : '📅 Kommende Events')
     .setDescription(lines.length ? clip(lines.slice(-40)) : 'Keine Events geplant.');
   return interaction.editReply({ embeds: [embed] });
+}
+
+async function serie(interaction, sub) {
+  const guildId = interaction.guildId;
+  if (sub === 'liste') {
+    const list = store.listSeries(guildId);
+    const lines = list.map((x) =>
+      `🔁 **#${x.ID} ${x.titel || x.art}** – ${formatDays(x.tage)} um ${x.zeit} – <#${x.voiceId}> – ${money(x.betrag)}` +
+      `${x.dauer ? ` · ${x.dauer} Min` : ''} · Ankündigung ${x.vorlauf ?? 60} Min vorher`);
+    const embed = new EmbedBuilder()
+      .setColor(0xeb459e)
+      .setTitle('🔁 Regelmäßige Events')
+      .setDescription(lines.length ? clip(lines) : 'Keine. Anlegen mit `/event serie anlegen`.');
+    return interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
+  }
+
+  if (await denyUnlessAdmin(interaction)) return;
+
+  if (sub === 'loeschen') {
+    const removed = store.deleteSeries(guildId, interaction.options.getInteger('serie'));
+    return interaction.reply({
+      content: removed ? `🗑️ Serie #${removed.ID} (${removed.titel || removed.art}, ${formatDays(removed.tage)} ${removed.zeit}) gelöscht. Bereits angekündigte Events laufen normal weiter.` : 'Diese Serie gibt es nicht.',
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+
+  // anlegen
+  const o = interaction.options;
+  const tage = parseDays(o.getString('tage'));
+  if (!tage) return interaction.reply({ content: '⛔ Tage nicht erkannt. Beispiele: `täglich`, `Mo-Fr`, `Mi,Sa`, `Wochenende`', flags: MessageFlags.Ephemeral });
+  const time = parseTime(o.getString('zeit'));
+  if (!time) return interaction.reply({ content: '⛔ Uhrzeit nicht erkannt. Beispiel: `20:00`', flags: MessageFlags.Ephemeral });
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+  const liste = await currentList(guildId);
+  const art = requireEvent(liste, o.getString('art'));
+  const postChannelId = o.getChannel('post_kanal')?.id ?? servers.get(guildId).announceChannelId ?? interaction.channelId;
+  const created = store.createSeries(guildId, {
+    art: art.name,
+    betrag: art.amount,
+    titel: o.getString('titel') || '',
+    tage,
+    zeit: formatTime(time),
+    dauer: o.getInteger('dauer') ?? null,
+    vorlauf: o.getInteger('vorlauf') ?? 60,
+    minMinuten: o.getInteger('min_minuten') ?? null,
+    beschreibung: o.getString('beschreibung') ?? '',
+    pingRoleId: o.getRole('ping')?.id ?? null,
+    voiceId: o.getChannel('call').id,
+    postId: postChannelId,
+    createdBy: interaction.user.username,
+  });
+  return interaction.editReply(
+    `✅ Serie #${created.ID} angelegt: **${created.titel || art.name}** ${formatDays(tage)} um ${created.zeit} in <#${created.voiceId}>.\n` +
+    `Die Ankündigung kommt jeweils ${created.vorlauf} Min vorher in <#${postChannelId}>, die Call-Erfassung startet automatisch` +
+    (created.dauer ? ` und endet nach ${created.dauer} Min mit Eintrag in „${art.name}“.` : '. Ohne Dauer muss jedes Event mit `/event ende` beendet werden.'));
 }

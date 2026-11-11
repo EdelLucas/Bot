@@ -5,7 +5,8 @@ const servers = require('./servers');
 const store = require('./eventstore');
 const tracker = require('./tracker');
 const config = require('./config');
-const { discordTs, money, minutes, clip } = require('./format');
+const { discordTs, money, minutes, clip, todayAt, parseTime, formatDays } = require('./format');
+const payoutList = require('./payoutlist');
 
 const EVENT = { GEPLANT: 'Geplant', LAEUFT: 'Läuft', BEENDET: 'Beendet', ABGEBROCHEN: 'Abgebrochen' };
 
@@ -40,6 +41,66 @@ function resolvePlayer(liste, guildId, user) {
   if (byName) return byName;
   const ids = String(user.name).match(/\d{2,}/g) || [];
   return ids.map((id) => liste.byId(id)).find(Boolean) || null;
+}
+
+/** Postet die Ankündigung eines Events (mit optionalem Rollen-Ping) und merkt sich die Nachricht. */
+async function announceEvent(client, ev, pingRoleId = null) {
+  const call = `<#${ev.voiceId}>`;
+  const mindest = ev.minMinuten != null ? `${ev.minMinuten} Min` : `${config.payout.minPercent} % der Eventdauer`;
+  const embed = new EmbedBuilder()
+    .setColor(0xeb459e)
+    .setTitle(`📣 ${eventTitle(ev)}`)
+    .setDescription(ev.beschreibung || null)
+    .addFields(
+      { name: '🕒 Start', value: `${discordTs(ev.start, 'F')}\n(${discordTs(ev.start, 'R')})`, inline: true },
+      { name: '⏱️ Dauer', value: ev.dauer ? `${ev.dauer} Min` : 'offen', inline: true },
+      { name: '🔊 Call', value: call, inline: true },
+      { name: '💰 Auszahlung', value: `${money(ev.betrag)} pro Teilnehmer`, inline: true },
+      { name: '✅ Bedingung', value: `mind. ${mindest} im Call`, inline: true },
+    )
+    .setFooter({ text: `Event #${ev.ID} · zählt als „${ev.art}“${ev.serieId ? ` · Serie #${ev.serieId}` : ''} · nicht in der Liste? → /id setzen` });
+
+  const isEveryone = pingRoleId && pingRoleId === ev._guild;
+  const msg = await postTo(client, ev.postId, {
+    content: pingRoleId ? (isEveryone ? '@everyone' : `<@&${pingRoleId}>`) : undefined,
+    embeds: [embed],
+    allowedMentions: isEveryone ? { parse: ['everyone'] } : { roles: pingRoleId ? [pingRoleId] : [] },
+  });
+  if (msg) store.update(ev._guild, ev.ID, { messageId: msg.id });
+  return msg;
+}
+
+/** Legt aus einer Serie das heutige Event an und kündigt es an, sobald die Vorlaufzeit erreicht ist. */
+async function tickSeries(client, guildId, now) {
+  for (const serie of store.listSeries(guildId)) {
+    const time = parseTime(serie.zeit);
+    if (!time) continue;
+    const { dateKey, weekday, ms } = todayAt(time, now);
+    if (!serie.tage.includes(weekday) || serie.lastFor === dateKey) continue;
+    if (now < ms - (serie.vorlauf ?? 60) * 60_000) continue; // noch zu früh für die Ankündigung
+    store.updateSeries(guildId, serie.ID, { lastFor: dateKey });
+    if (now > ms + 10 * 60_000) continue; // verpasst (Bot war offline)
+
+    const ev = store.create(guildId, {
+      art: serie.art, betrag: serie.betrag, titel: serie.titel || '', start: ms, dauer: serie.dauer ?? null,
+      minMinuten: serie.minMinuten ?? null, voiceId: serie.voiceId, postId: serie.postId, status: EVENT.GEPLANT,
+      createdBy: `Serie #${serie.ID}`, beschreibung: serie.beschreibung || '', serieId: serie.ID,
+    });
+    await announceEvent(client, ev, serie.pingRoleId);
+    console.log(`📣 Serie #${serie.ID} (${formatDays(serie.tage)} ${serie.zeit}): Event #${ev.ID} angekündigt`);
+  }
+}
+
+/** Postet die Auszahlungsliste automatisch zu den eingestellten Zeiten. */
+async function tickPayoutPlan(client, guildId, now) {
+  const plan = store.getPayoutPlan(guildId);
+  const time = plan && parseTime(plan.zeit);
+  if (!time) return;
+  const { dateKey, weekday, ms } = todayAt(time, now);
+  if (!plan.tage.includes(weekday) || plan.lastFor === dateKey || now < ms) return;
+  store.setPayoutPlan(guildId, { ...plan, lastFor: dateKey });
+  if (now > ms + 60 * 60_000) return; // verpasst
+  await payoutList.post(client, guildId, plan.channelId);
 }
 
 const starting = new Set();
@@ -147,6 +208,8 @@ async function cancelEvent(ev) {
 /** Startet/beendet fällige Events eines Servers. */
 async function tickGuild(client, guildId) {
   const now = Date.now();
+  await tickSeries(client, guildId, now).catch((e) => console.error('Serien:', e.message));
+  await tickPayoutPlan(client, guildId, now).catch((e) => console.error('Auszahlungsliste:', e.message));
   for (const ev of store.list(guildId)) {
     const dauerMs = (Number(ev.dauer) || 0) * 60_000;
     if (ev.status === EVENT.GEPLANT && ev.start <= now) {
@@ -186,6 +249,6 @@ function startScheduler(client) {
 }
 
 module.exports = {
-  EVENT, trackKey, eventTitle, startEvent, endEvent, cancelEvent, creditPending,
-  resolvePlayer, startScheduler, minAttendanceMs, postTo,
+  EVENT, trackKey, eventTitle, announceEvent, startEvent, endEvent, cancelEvent, creditPending,
+  resolvePlayer, startScheduler, tickGuild, minAttendanceMs, postTo,
 };

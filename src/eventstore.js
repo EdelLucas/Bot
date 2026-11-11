@@ -18,7 +18,14 @@ function save() {
   fs.renameSync(`${FILE}.tmp`, FILE);
 }
 
-const guild = (guildId) => (state[guildId] ??= { nextId: 1, events: {} });
+const guild = (guildId) => {
+  const g = (state[guildId] ??= {});
+  g.nextId ??= 1;
+  g.events ??= {};
+  g.series ??= {};
+  g.nextSeriesId ??= 1;
+  return g;
+};
 
 function create(guildId, data) {
   const g = guild(guildId);
@@ -49,4 +56,46 @@ function guildIds() {
   return Object.keys(state);
 }
 
-module.exports = { create, get, update, list, guildIds };
+// ---- Regelmäßige Events (Serien) ----
+function createSeries(guildId, data) {
+  const g = guild(guildId);
+  const serie = { ...data, ID: g.nextSeriesId++ };
+  g.series[serie.ID] = serie;
+  save();
+  return serie;
+}
+
+function listSeries(guildId) {
+  return Object.values(state[guildId]?.series || {});
+}
+
+function updateSeries(guildId, id, changes) {
+  const serie = state[guildId]?.series?.[id];
+  if (!serie) return null;
+  Object.assign(serie, changes);
+  save();
+  return serie;
+}
+
+function deleteSeries(guildId, id) {
+  const serie = state[guildId]?.series?.[id];
+  if (!serie) return null;
+  delete state[guildId].series[id];
+  save();
+  return serie;
+}
+
+// ---- Automatische Auszahlungsliste ----
+function getPayoutPlan(guildId) {
+  return state[guildId]?.payoutPlan || null;
+}
+
+function setPayoutPlan(guildId, plan) {
+  guild(guildId).payoutPlan = plan;
+  save();
+}
+
+module.exports = {
+  create, get, update, list, guildIds,
+  createSeries, listSeries, updateSeries, deleteSeries, getPayoutPlan, setPayoutPlan,
+};

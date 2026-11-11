@@ -86,3 +86,62 @@ function clip(lines, max = 4000) {
 }
 
 module.exports = { parseDateTime, formatDate, discordTs, money, minutes, clip };
+
+// ---- Wochentage & Uhrzeiten für regelmäßige Events ----
+const DAY_KEYS = ['so', 'mo', 'di', 'mi', 'do', 'fr', 'sa'];
+const DAY_LABELS = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
+
+/** "täglich", "Mo-Fr", "Mo,Mi,Fr", "Sa So", "Wochenende", "werktags" → [Wochentag-Nummern 0=So..6=Sa] oder null. */
+function parseDays(input) {
+  const s = String(input ?? '').trim().toLowerCase();
+  if (!s) return null;
+  if (/^(täglich|taeglich|jeden tag|alle|immer|mo-so)$/.test(s)) return [0, 1, 2, 3, 4, 5, 6];
+  const days = new Set();
+  let rest = s;
+  if (/wochenende/.test(rest)) { days.add(6); days.add(0); rest = rest.replace(/wochenende/g, ' '); }
+  if (/werktags|wochentags/.test(rest)) { [1, 2, 3, 4, 5].forEach((d) => days.add(d)); rest = rest.replace(/werktags|wochentags/g, ' '); }
+  const idx = (t) => DAY_KEYS.indexOf(t.slice(0, 2));
+  for (const token of rest.split(/[\s,;/+&]+|und/).filter(Boolean)) {
+    const range = token.split('-');
+    if (range.length === 2) {
+      const a = idx(range[0]);
+      const b = idx(range[1]);
+      if (a < 0 || b < 0) return null;
+      for (let d = a; ; d = (d + 1) % 7) { days.add(d); if (d === b) break; }
+    } else {
+      const d = idx(token);
+      if (d < 0) return null;
+      days.add(d);
+    }
+  }
+  return days.size ? [...days].sort() : null;
+}
+
+function formatDays(days) {
+  if (days.length === 7) return 'täglich';
+  if (days.join() === '1,2,3,4,5') return 'Mo–Fr';
+  return [1, 2, 3, 4, 5, 6, 0].filter((d) => days.includes(d)).map((d) => DAY_LABELS[d]).join(', ');
+}
+
+/** "20:00", "20.30", "8 Uhr" → { h, mi } oder null. */
+function parseTime(input) {
+  const m = String(input ?? '').trim().match(/^(\d{1,2})(?:[:.](\d{2}))?\s*(?:uhr)?$/i);
+  if (!m || Number(m[1]) > 23 || Number(m[2] ?? 0) > 59) return null;
+  return { h: Number(m[1]), mi: Number(m[2] ?? 0) };
+}
+
+/** Heutiges Datum in der Zeitzone + Zeitpunkt der angegebenen Uhrzeit heute. */
+function todayAt(time, now = Date.now()) {
+  const { y, mo, d } = localParts(now);
+  const weekday = new Date(Date.UTC(y, mo - 1, d)).getUTCDay();
+  return { dateKey: `${y}-${mo}-${d}`, weekday, ms: localToUtc(y, mo, d, time.h, time.mi) };
+}
+
+const pad = (n) => String(n).padStart(2, '0');
+const formatTime = (t) => `${pad(t.h)}:${pad(t.mi)}`;
+
+module.exports.parseDays = parseDays;
+module.exports.formatDays = formatDays;
+module.exports.parseTime = parseTime;
+module.exports.formatTime = formatTime;
+module.exports.todayAt = todayAt;

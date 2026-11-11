@@ -56,6 +56,16 @@ function setPlayerId(guildId, discordId, playerId) {
   save();
 }
 
+/** Entfernt alle Verknüpfungen zu einer Spieler-ID. */
+function unlinkPlayer(guildId, playerId) {
+  const players = servers[guildId]?.players;
+  if (!players) return 0;
+  const ids = Object.keys(players).filter((did) => players[did] === String(playerId));
+  ids.forEach((did) => delete players[did]);
+  if (ids.length) save();
+  return ids.length;
+}
+
 /** Discord-Konten, die mit einer Spieler-ID verknüpft sind. */
 function discordIdsOf(guildId, playerId) {
   return Object.entries(servers[guildId]?.players || {})
@@ -68,4 +78,4 @@ function configuredGuildIds() {
   return Object.keys(servers).filter((id) => servers[id].sheetId && servers[id].tab);
 }
 
-module.exports = { get, set, sheetOf, getPlayerId, setPlayerId, discordIdsOf, configuredGuildIds };
+module.exports = { get, set, sheetOf, getPlayerId, setPlayerId, unlinkPlayer, discordIdsOf, configuredGuildIds };
