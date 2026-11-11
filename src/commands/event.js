@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, EmbedBuilder, ChannelType } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder, ChannelType, MessageFlags } = require('discord.js');
 const servers = require('../servers');
 const store = require('../eventstore');
 const events = require('../events');
@@ -70,7 +70,7 @@ module.exports = {
     if (await denyUnlessAdmin(interaction)) return;
     if (sub === 'ankuendigen') return ankuendigen(interaction);
 
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const ev = store.get(interaction.guildId, interaction.options.getInteger('event'));
     if (!ev) return interaction.editReply('Dieses Event gibt es nicht.');
 
@@ -118,12 +118,12 @@ async function ankuendigen(interaction) {
   const o = interaction.options;
   const startMs = parseDateTime(o.getString('start'));
   if (!startMs) {
-    return interaction.reply({ content: '⛔ Startzeit nicht erkannt. Beispiele: `20.11.2026 20:00`, `20.11. 20:00`, `20:00`', ephemeral: true });
+    return interaction.reply({ content: '⛔ Startzeit nicht erkannt. Beispiele: `20.11.2026 20:00`, `20.11. 20:00`, `20:00`', flags: MessageFlags.Ephemeral });
   }
   if (startMs < Date.now() - 5 * 60_000) {
-    return interaction.reply({ content: `⛔ Die Startzeit (${formatDate(startMs)}) liegt in der Vergangenheit.`, ephemeral: true });
+    return interaction.reply({ content: `⛔ Die Startzeit (${formatDate(startMs)}) liegt in der Vergangenheit.`, flags: MessageFlags.Ephemeral });
   }
-  await interaction.deferReply({ ephemeral: true });
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   const liste = await currentList(interaction.guildId);
   const art = requireEvent(liste, o.getString('art'));

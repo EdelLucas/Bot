@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, EmbedBuilder, ChannelType, PermissionFlagsBits } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder, ChannelType, PermissionFlagsBits, MessageFlags } = require('discord.js');
 const sheets = require('../sheets');
 const servers = require('../servers');
 const { money } = require('../format');
@@ -65,7 +65,7 @@ module.exports = {
 
   async execute(interaction) {
     if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) {
-      return interaction.reply({ content: '⛔ Nur Leute mit „Server verwalten“ können den Bot einrichten.', ephemeral: true });
+      return interaction.reply({ content: '⛔ Nur Leute mit „Server verwalten“ können den Bot einrichten.', flags: MessageFlags.Ephemeral });
     }
     const sub = interaction.options.getSubcommand();
     const guildId = interaction.guildId;
@@ -79,16 +79,16 @@ module.exports = {
         if (!parsed) {
           return interaction.reply({
             content: '⛔ Das sieht nicht nach einem Google-Sheet-Link aus. Beispiel: `https://docs.google.com/spreadsheets/d/1AbC.../edit#gid=0`',
-            ephemeral: true,
+            flags: MessageFlags.Ephemeral,
           });
         }
         ({ sheetId, gid } = parsed);
       } else {
         sheetId = servers.get(guildId).sheetId;
-        if (!sheetId) return interaction.reply({ content: 'Zuerst `/setup sheet` ausführen.', ephemeral: true });
+        if (!sheetId) return interaction.reply({ content: 'Zuerst `/setup sheet` ausführen.', flags: MessageFlags.Ephemeral });
       }
       const blatt = interaction.options.getString(sub === 'sheet' ? 'blatt' : 'name');
-      await interaction.deferReply({ ephemeral: true });
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
       let liste;
       try {
@@ -106,19 +106,19 @@ module.exports = {
     if (sub === 'kanal') {
       const kanal = interaction.options.getChannel('kanal');
       servers.set(guildId, { announceChannelId: kanal.id });
-      return interaction.reply({ content: `✅ Events werden ab jetzt in ${kanal} angekündigt.`, ephemeral: true });
+      return interaction.reply({ content: `✅ Events werden ab jetzt in ${kanal} angekündigt.`, flags: MessageFlags.Ephemeral });
     }
 
     if (sub === 'adminrolle') {
       const rolle = interaction.options.getRole('rolle');
       servers.set(guildId, { adminRoleId: rolle.id });
       return interaction.reply({
-        content: `✅ ${rolle} darf jetzt Events und Auszahlungen verwalten.`, ephemeral: true, allowedMentions: { parse: [] },
+        content: `✅ ${rolle} darf jetzt Events und Auszahlungen verwalten.`, flags: MessageFlags.Ephemeral, allowedMentions: { parse: [] },
       });
     }
 
     // info
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const s = servers.get(guildId);
     const embeds = [new EmbedBuilder()
       .setColor(0x5865f2)

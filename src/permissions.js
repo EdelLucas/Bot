@@ -1,4 +1,4 @@
-const { PermissionFlagsBits } = require('discord.js');
+const { PermissionFlagsBits, MessageFlags } = require('discord.js');
 const servers = require('./servers');
 
 /** Admin = Berechtigung "Server verwalten" oder die per /setup festgelegte Admin-Rolle. */
@@ -12,7 +12,7 @@ function isAdmin(interaction) {
 
 async function denyUnlessAdmin(interaction) {
   if (isAdmin(interaction)) return false;
-  await interaction.reply({ content: '⛔ Dafür brauchst du Admin-Rechte.', ephemeral: true });
+  await interaction.reply({ content: '⛔ Dafür brauchst du Admin-Rechte.', flags: MessageFlags.Ephemeral });
   return true;
 }
 

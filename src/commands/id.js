@@ -1,4 +1,4 @@
-const { SlashCommandBuilder } = require('discord.js');
+const { SlashCommandBuilder, MessageFlags } = require('discord.js');
 const sheets = require('../sheets');
 const servers = require('../servers');
 const events = require('../events');
@@ -38,7 +38,7 @@ module.exports = {
     const member = interaction.options.getMember('benutzer') ?? interaction.member;
 
     if (sub === 'anzeigen') {
-      await interaction.deferReply({ ephemeral: true });
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
       const liste = await currentList(guildId);
       const p = events.resolvePlayer(liste, guildId, { id: target.id, name: member?.displayName ?? target.username });
       const linked = servers.getPlayerId(guildId, target.id);
@@ -54,8 +54,8 @@ module.exports = {
       if (await denyUnlessAdmin(interaction)) return;
       const name = interaction.options.getString('name').trim();
       const spielerId = interaction.options.getString('spieler_id').trim();
-      if (!/^\d+$/.test(spielerId)) return interaction.reply({ content: '⛔ Die Spieler-ID muss eine Zahl sein.', ephemeral: true });
-      await interaction.deferReply({ ephemeral: true });
+      if (!/^\d+$/.test(spielerId)) return interaction.reply({ content: '⛔ Die Spieler-ID muss eine Zahl sein.', flags: MessageFlags.Ephemeral });
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
       const { sheetId, tab } = servers.sheetOf(guildId);
       const added = await sheets.appendPlayer(sheetId, tab, name, spielerId);
       const linkUser = interaction.options.getUser('benutzer');
@@ -66,9 +66,9 @@ module.exports = {
     // setzen
     const admin = isAdmin(interaction);
     if (target.id !== interaction.user.id && !admin) {
-      return interaction.reply({ content: '⛔ Nur Admins können andere verknüpfen.', ephemeral: true });
+      return interaction.reply({ content: '⛔ Nur Admins können andere verknüpfen.', flags: MessageFlags.Ephemeral });
     }
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const liste = await currentList(guildId);
     const player = requirePlayer(liste, interaction.options.getString('spieler'));
     if (!player.id) return interaction.editReply('⛔ Dieser Eintrag hat keine Spieler-ID in der Liste.');

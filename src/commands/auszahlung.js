@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder, MessageFlags } = require('discord.js');
 const sheets = require('../sheets');
 const servers = require('../servers');
 const events = require('../events');
@@ -60,7 +60,7 @@ module.exports = {
     const guildId = interaction.guildId;
 
     if (sub === 'meine') {
-      await interaction.deferReply({ ephemeral: true });
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
       const liste = await currentList(guildId);
       const player = events.resolvePlayer(liste, guildId, { id: interaction.user.id, name: interaction.member?.displayName ?? interaction.user.username });
       if (!player) return interaction.editReply('Du bist noch mit keinem Eintrag in der Liste verknüpft → `/id setzen`.');

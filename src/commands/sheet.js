@@ -1,4 +1,4 @@
-const { SlashCommandBuilder } = require('discord.js');
+const { SlashCommandBuilder, MessageFlags } = require('discord.js');
 const servers = require('../servers');
 
 module.exports = {
@@ -9,7 +9,7 @@ module.exports = {
       content: sheetId
         ? `📊 https://docs.google.com/spreadsheets/d/${sheetId}/edit (Blatt „${tab}“)`
         : 'Für diesen Server ist noch keine Liste eingerichtet (`/setup sheet`).',
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
   },
 };

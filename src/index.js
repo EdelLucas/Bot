@@ -1,4 +1,4 @@
-const { Client, GatewayIntentBits, Events, Collection } = require('discord.js');
+const { Client, GatewayIntentBits, Events, Collection, MessageFlags } = require('discord.js');
 const config = require('./config');
 const sheets = require('./sheets');
 const servers = require('./servers');
@@ -68,7 +68,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
     await command.execute(interaction);
   } catch (err) {
     console.error(`Fehler in /${interaction.commandName}:`, err);
-    const msg = { content: `❌ ${err.message || 'Da ist etwas schiefgelaufen.'}`, ephemeral: true };
+    const msg = { content: `❌ ${err.message || 'Da ist etwas schiefgelaufen.'}`, flags: MessageFlags.Ephemeral };
     try {
       if (interaction.deferred || interaction.replied) await interaction.editReply(msg);
       else await interaction.reply(msg);
