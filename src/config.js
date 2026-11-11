@@ -1,11 +1,35 @@
-require('dotenv').config();
 const fs = require('node:fs');
 const path = require('node:path');
+
+// .env einlesen – tolerant, weil die Datei oft am Handy/Tablet angelegt wird:
+// erlaubt "KEY=wert" und "KEY: wert", Anführungszeichen, Leerzeichen und die Namen env / .env.txt / env.txt
+const ENV_FILES = ['.env', 'env', '.env.txt', 'env.txt', '.env.example.txt'];
+function loadEnvFiles() {
+  for (const name of ENV_FILES) {
+    const file = path.join(process.cwd(), name);
+    if (!fs.existsSync(file)) continue;
+    let count = 0;
+    for (const line of fs.readFileSync(file, 'utf8').replace(/^\uFEFF/, '').split(/\r?\n/)) {
+      const m = line.match(/^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*[:=]\s*(.*?)\s*$/);
+      if (!m || line.trim().startsWith('#')) continue;
+      const value = m[2].replace(/^(['"])(.*)\1$/, '$2');
+      if (value && !process.env[m[1]]) process.env[m[1]] = value; // Panel-Variablen haben Vorrang
+      count++;
+    }
+    console.log(`📄 Einstellungen aus "${name}" geladen (${count} Einträge)`);
+  }
+}
+loadEnvFiles();
 
 function required(name) {
   const value = process.env[name];
   if (!value || !value.trim()) {
-    throw new Error(`Umgebungsvariable ${name} fehlt. Siehe .env.example.`);
+    const files = fs.readdirSync(process.cwd()).filter((f) => /env/i.test(f));
+    throw new Error(
+      `${name} fehlt. Lege im Hauptordner (${process.cwd()}) eine Datei ".env" an mit der Zeile\n` +
+      `   ${name}=dein-wert\n` +
+      `Gefundene env-Dateien: ${files.length ? files.join(', ') : 'keine'}`,
+    );
   }
   return value.trim();
 }
