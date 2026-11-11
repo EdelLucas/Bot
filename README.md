@@ -104,6 +104,8 @@ npm install
 npm start                # registriert die Slash-Commands beim Start automatisch
 ```
 
+👉 **Zum ersten Testen (auch vom Tablet):** siehe [docs/TESTEN.md](docs/TESTEN.md)
+
 👉 **24/7 kostenlos hosten (z.B. auf Bot-Hosting.net, ohne Kreditkarte):** siehe [docs/HOSTING.md](docs/HOSTING.md)
 
 Der Bot muss während des Events laufen, sonst kann er den Call nicht erfassen. Die laufende Erfassung wird in `data/tracking.json` gespeichert. Nach einem Neustart läuft sie weiter, nur die Zeit, in der der Bot offline war, wird niemandem angerechnet.
